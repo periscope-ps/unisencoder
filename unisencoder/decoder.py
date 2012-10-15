@@ -138,6 +138,7 @@ class RSpec3Decoder(UNISDecoder):
     """Decodes RSpecV3 to UNIS format."""
     
     rspec3 = "http://www.geni.net/resources/rspec/3"
+    gemini = "http://geni.net/resources/rspec/ext/gemini/1"
     
     RSpecADV = "advertisement"
     RSpecRequest = "request"
@@ -151,10 +152,13 @@ class RSpec3Decoder(UNISDecoder):
         self._jsonpointer_path = "#/"
         self._urn_cache = {}
         self._component_id_cache = {}
+        self._sliver_id_cache = {}
         self.geni_ns = "geni"
         self._ignored_namespaces = [
             "http://hpn.east.isi.edu/rspec/ext/stitch/0.1/",
             "http://www.protogeni.net/resources/rspec/ext/emulab/1",
+            "http://www.protogeni.net/resources/rspec/ext/flack/1",
+            "http://www.protogeni.net/resources/rspec/ext/client/1",
         ]
         
         self._handlers = {
@@ -173,6 +177,9 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (RSpec3Decoder.rspec3, "interface_ref") : self._encode_rspec_interface_ref,
             "{%s}%s" % (RSpec3Decoder.rspec3, "property") : self._encode_rspec_property,
             "{%s}%s" % (RSpec3Decoder.rspec3, "host") : self._encode_rspec_host,
+            "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
+            "{%s}%s" % (RSpec3Decoder.gemini, "node") : self._encode_gemini_node,
+            "{%s}%s" % (RSpec3Decoder.gemini, "monitor_urn") : self._encode_gemini_monitor_urn,
         }
     
     def _encode_children(self, doc, out, **kwargs):
@@ -318,6 +325,12 @@ class RSpec3Decoder(UNISDecoder):
         self._encode_children(doc, out, rspec_type=rspec_type,
             collection=collection, parent=out, **kwargs)
         
+        if rspec_type == RSpec3Decoder.RSpecManifest:
+            slice_urn = kwargs.get("slice_urn")            
+            out["urn"] = slice_urn
+            geni_props['slice_urn'] = slice_urn
+            out["id"] = self.geni_urn_to_id(slice_urn)
+            
         if len(attrib) > 0:
             self.log.warn("unpares_attribute.warn", attribs=attrib, guid=self._guid)
             sys.stderr.write("Unparsed attributes: %s\n" % attrib)
@@ -384,8 +397,9 @@ class RSpec3Decoder(UNISDecoder):
                 node["name"] = geni_props['component_name']
         elif rspec_type == RSpec3Decoder.RSpecManifest:
             slice_urn = kwargs.get("slice_urn")
+            geni_props['slice_urn'] = slice_urn
             node["urn"] = RSpec3Decoder.rspec_create_urn(slice_urn+"+node+"+geni_props['client_id'])
-            node["id"] = self.geni_urn_to_id(slice_urn+"+node+"+geni_props['client_id'])
+            node["id"] = self.geni_urn_to_id(slice_urn+"_node_"+geni_props['client_id'])
             node["name"] = geni_props['client_id']
             if component_id is not None:
                 if 'relations' not in node:
@@ -473,8 +487,9 @@ class RSpec3Decoder(UNISDecoder):
                 port["name"] = geni_props['component_name']
         elif rspec_type == RSpec3Decoder.RSpecManifest:
             slice_urn = kwargs.get("slice_urn")
+            geni_props['slice_urn'] = slice_urn
             port["urn"] = RSpec3Decoder.rspec_create_urn(slice_urn+"+interface+"+geni_props['client_id'])
-            port["id"] = self.geni_urn_to_id(slice_urn+"+interface+"+geni_props['client_id'])
+            port["id"] = self.geni_urn_to_id(slice_urn+"_interface_"+geni_props['client_id'])
             port["name"] = geni_props['client_id']
             if component_id is not None:
                 if 'relations' not in port:
@@ -536,6 +551,9 @@ class RSpec3Decoder(UNISDecoder):
         component_name = attrib.pop('component_name', None)
         # From request.rnc
         client_id = attrib.pop('client_id', None)
+        # From mainfest.rnc
+        vlantag = attrib.pop('vlantag', None)
+        sliver_id = attrib.pop('sliver_id', None)
         
         if component_id is not None:
             geni_props['component_id'] = unquote(component_id.strip())
@@ -543,6 +561,10 @@ class RSpec3Decoder(UNISDecoder):
             geni_props['component_name'] = component_name.strip()
         if client_id is not None:
             geni_props['client_id'] = client_id.strip()
+        if vlantag is not None:
+            geni_props['vlantag'] = vlantag.strip()
+        if sliver_id is not None:
+            geni_props['sliver_id'] = sliver_id.strip()
             
         
         # Set URN, ID, and name
@@ -555,8 +577,9 @@ class RSpec3Decoder(UNISDecoder):
                 link["name"] = geni_props['component_name']
         elif rspec_type == RSpec3Decoder.RSpecManifest:
             slice_urn = kwargs.get("slice_urn")
-            link["urn"] = RSpec3Decoder.rspec_create_urn(slice_urn+"+interface+"+geni_props['client_id'])
-            link["id"] = self.geni_urn_to_id(slice_urn+"+interface+"+geni_props['client_id'])
+            geni_props['slice_urn'] = slice_urn
+            link["urn"] = RSpec3Decoder.rspec_create_urn(slice_urn+"+link+"+geni_props['client_id'])
+            link["id"] = self.geni_urn_to_id(slice_urn+"_link_"+geni_props['client_id'])
             link["name"] = geni_props['client_id']
             if component_id is not None:
                 if 'relations' not in link:
@@ -574,93 +597,121 @@ class RSpec3Decoder(UNISDecoder):
         self._encode_children(doc, link, collection=collection,
             parent=link, **kwargs)
         
-        # Try to find the link's endpoints in the properties
-        link_props = geni_props.get('properties', None)
-        if link_props is not None:
-            # Assume default endpoints at first
-            ends_id = [
-                {"source_id": None, "dest_id": None, "props": {}},
-                {"source_id": None, "dest_id": None, "props": {}},
-            ]
-            # Then make sure that all for all properties there is at most two endpoints
-            for prop in link_props:
-                source_id = prop.get("source_id", None) 
-                dest_id = prop.get("dest_id", None) 
-                if ends_id[0]["source_id"] is None and source_id is not None and dest_id is not None:
-                    ends_id[0]["source_id"] = source_id
-                    ends_id[0]["dest_id"] = dest_id
-                    ends_id[0]["props"].update(prop)
-                elif ends_id[1]["source_id"] is None and source_id is not None and dest_id is not None:
-                    ends_id[1]["source_id"] = source_id
-                    ends_id[1]["dest_id"] = dest_id
-                    ends_id[1]["props"].update(prop)
-                elif source_id is None or dest_id is None:
-                    raise UNISDecoderException("Incomplete link property")
+        # First try to establish links by interface_ref
+        interface_refs = geni_props.get("interface_refs", [])
+        if len(interface_refs) == 2:
+            hrefs = []
+            for interface in interface_refs:
+                if rspec_type == RSpec3Decoder.RSpecManifest:
+                    interface_id = interface["sliver_id"]
+                    if not interface_id:
+                        raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
+                    element = self._find_sliver_id(interface_id, "interface")
                 else:
-                    if {"source_id": source_id, "dest_id": dest_id} not in ends_id:
-                        raise UNISDecoderException("end matching source and dest")
-            # Check if the link is unidirectional or bidirectional
-            unidirectional = {"source_id": None, "dest_id": None} in ends_id
-            
-            if unidirectional is True:
-                ends_id.remove({"source_id": None, "dest_id": None})
-                link["directed"] = True
-                src_port = self._find_component_id(ends_id[0]["source_id"], "interface")
-                dst_port = self._find_component_id(ends_id[0]["dest_id"], "interface")
-                
-                if src_port is None:
-                    src_port = ends_id[0]["source_id"]
-                else:
-                    src_port = self._make_self_link(src_port)
-                    
-                if dst_port is None:
-                    dst_port = ends_id[0]["dest_id"]
-                else:
-                    dst_port = self._make_self_link(dst_port)
-                
-                
-                link["endpoints"] = {
-                    "source": {
-                        "href": self._make_self_link(src_port),
-                        "rel": "full"
-                    },
-                    "sink": {
-                        "href": self._make_self_link(dst_port),
-                        "rel": "full"
-                    }
+                    interface_id = interface.get("component_id", None)
+                    if not interface_id:
+                        raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
+                    element = self._find_component_id(interface_id, "interface")
+                hrefs.append(self._make_self_link(element, rspec_type=rspec_type))
+            link["directed"] = False
+            link["endpoints"] = [
+                {
+                    "href": hrefs[0],
+                    "rel": "full"
+                },
+                {
+                    "href": hrefs[1],
+                    "rel": "full"
                 }
-                if "capacity" in ends_id[0]["props"]:
-                    link["capacity"] = float(ends_id[0]["props"]["capacity"])
-            else:
-                link["directed"] = False
-                src_port = self._find_component_id(ends_id[0]["source_id"], "interface")
-                dst_port = self._find_component_id(ends_id[0]["dest_id"], "interface")
-                if src_port is None:
-                    src_port = ends_id[0]["source_id"]
-                else:
-                    src_port = self._make_self_link(src_port)
-                    
-                if dst_port is None:
-                    dst_port = ends_id[0]["dest_id"]
-                else:
-                    dst_port = self._make_self_link(dst_port)
-                
-                link["endpoints"] = [
-                    {
-                        "href": src_port,
-                        "rel": "full"
-                    },
-                    {
-                        "href": dst_port,
-                        "rel": "full"
-                    }
+            ]
+        else:
+            # Try to find the link's endpoints in the properties
+            link_props = geni_props.get('properties', None)
+            if link_props is not None:
+                # Assume default endpoints at first
+                ends_id = [
+                    {"source_id": None, "dest_id": None, "props": {}},
+                    {"source_id": None, "dest_id": None, "props": {}},
                 ]
-                # Check if the links has symmetric capacity
-                if ends_id[0]["props"].get("capacity", None) == \
-                    ends_id[1]["props"].get("capacity", None) and \
-                    ends_id[1]["props"].get("capacity", None) is not None:
-                    link["capacity"] = float(ends_id[0]["props"]["capacity"])
+                # Then make sure that all for all properties there is at most two endpoints
+                for prop in link_props:
+                    source_id = prop.get("source_id", None) 
+                    dest_id = prop.get("dest_id", None) 
+                    if ends_id[0]["source_id"] is None and source_id is not None and dest_id is not None:
+                        ends_id[0]["source_id"] = source_id
+                        ends_id[0]["dest_id"] = dest_id
+                        ends_id[0]["props"].update(prop)
+                    elif ends_id[1]["source_id"] is None and source_id is not None and dest_id is not None:
+                        ends_id[1]["source_id"] = source_id
+                        ends_id[1]["dest_id"] = dest_id
+                        ends_id[1]["props"].update(prop)
+                    elif source_id is None or dest_id is None:
+                        raise UNISDecoderException("Incomplete link property")
+                    else:
+                        if {"source_id": source_id, "dest_id": dest_id} not in ends_id:
+                            raise UNISDecoderException("end matching source and dest")
+                # Check if the link is unidirectional or bidirectional
+                unidirectional = {"source_id": None, "dest_id": None} in ends_id
                 
+                if unidirectional is True:
+                    ends_id.remove({"source_id": None, "dest_id": None})
+                    link["directed"] = True
+                    src_port = self._find_component_id(ends_id[0]["source_id"], "interface")
+                    dst_port = self._find_component_id(ends_id[0]["dest_id"], "interface")
+                    
+                    if src_port is None:
+                        src_port = ends_id[0]["source_id"]
+                    else:
+                        src_port = self._make_self_link(src_port)
+                        
+                    if dst_port is None:
+                        dst_port = ends_id[0]["dest_id"]
+                    else:
+                        dst_port = self._make_self_link(dst_port)
+                    
+                    
+                    link["endpoints"] = {
+                        "source": {
+                            "href": self._make_self_link(src_port),
+                            "rel": "full"
+                        },
+                        "sink": {
+                            "href": self._make_self_link(dst_port),
+                            "rel": "full"
+                        }
+                    }
+                    if "capacity" in ends_id[0]["props"]:
+                        link["capacity"] = float(ends_id[0]["props"]["capacity"])
+                else:
+                    link["directed"] = False
+                    src_port = self._find_component_id(ends_id[0]["source_id"], "interface")
+                    dst_port = self._find_component_id(ends_id[0]["dest_id"], "interface")
+                    if src_port is None:
+                        src_port = ends_id[0]["source_id"]
+                    else:
+                        src_port = self._make_self_link(src_port)
+                        
+                    if dst_port is None:
+                        dst_port = ends_id[0]["dest_id"]
+                    else:
+                        dst_port = self._make_self_link(dst_port)
+                    
+                    link["endpoints"] = [
+                        {
+                            "href": src_port,
+                            "rel": "full"
+                        },
+                        {
+                            "href": dst_port,
+                            "rel": "full"
+                        }
+                    ]
+                    # Check if the links has symmetric capacity
+                    if ends_id[0]["props"].get("capacity", None) == \
+                        ends_id[1]["props"].get("capacity", None) and \
+                        ends_id[1]["props"].get("capacity", None) is not None:
+                        link["capacity"] = float(ends_id[0]["props"]["capacity"])
+        
         if link.get("endpoints", None) is None:
             print json.dumps(link, indent=2)
             raise UNISDecoderException(
@@ -726,8 +777,12 @@ class RSpec3Decoder(UNISDecoder):
         self.log.debug("_encode_rspec_available.end", guid=self._guid)
         return {"available": available}
     
-    def _make_self_link(self, element):        
-        urn = element.get("component_id", None)
+    def _make_self_link(self, element, rspec_type=None):
+        if rspec_type == RSpec3Decoder.RSpecManifest:
+            urn = element.get("sliver_id", None)
+        else:
+            urn = element.get("component_id", None)
+            
         if not urn:
             raise UNISDecoderException("Cannot link to an element withour URN")
         
@@ -779,9 +834,47 @@ class RSpec3Decoder(UNISDecoder):
         if add_urn:
             if jpath.endswith("]"):
                 jpath = jpath[:jpath.rindex("[")]
-            jpath += "[?(@.urn==\"%s\")]" % urn
+            if rspec_type == RSpec3Decoder.RSpecManifest:
+                jpath += "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
+            else:
+                jpath += "[?(@.urn==\"%s\")]" % urn
         self._urn_cache[urn] = jpath
         return jpath
+    
+    def _find_sliver_id(self, urn, component_type, try_hard=False):
+        """
+        Looks for the any element with sliver_id == urn and of type
+        component_type. component_type examples: interface and node.
+        This method trys all special cases I've seen and issues a
+        warning log if the URN found but was not in the right format.
+        """
+        def escape_urn(u):
+            return u.replace("/", "%2F").replace("#", "%23")
+        
+        if urn in self._sliver_id_cache:
+            self.log.debug("_find_sliver_id.end", guid=self._guid, urn=urn)
+            return self._sliver_id_cache[urn]
+        self.log.debug("_find_sliver_id.start", guid=self._guid, urn=urn)
+        if self._root is None:
+            self.log.debug("_find_sliver_id.end", guid=self._guid, urn=urn)
+            return None
+        xpath = ".//rspec:%s[@sliver_id='%s']" % (component_type, urn)
+        if try_hard == True:
+            escaped_urn = escape_urn(urn)
+            xpath = ".//rspec:%s[@sliver_id='%s' or @sliver_id='%s']" \
+                % (component_type, urn, escaped_urn)
+        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.rspec3})
+        
+        if len(result) > 1:
+            self.log.debug("_find_sliver_id.end", guid=self._guid, urn=urn)
+            raise UNISDecoderException("Found more than one node with the URN '%s'" % urn)
+        elif len(result) == 1:
+            result = result[0]
+        else:
+            result = None
+        self._sliver_id_cache[urn] = result
+        self.log.debug("_find_sliver_id.end", guid=self._guid, urn=urn)
+        return result
     
     def _find_component_id(self, urn, component_type, try_hard=False):
         """
@@ -1190,8 +1283,8 @@ class RSpec3Decoder(UNISDecoder):
         geni_props = parent["properties"][self.geni_ns]
         
         if "hosts" not in geni_props:
-            out["hosts"] = []
-        hosts = out["hosts"]
+            geni_props["hosts"] = []
+        hosts = geni_props["hosts"]
         host = {}        
         
         attrib = dict(doc.attrib)
@@ -1200,6 +1293,7 @@ class RSpec3Decoder(UNISDecoder):
         
         if hostname:
             host['hostname'] = hostname.strip()
+            parent["id"] = hostname
         
         if len(attrib) != 0:
             self.log.warn("unparesd_attributes", attribs=attrib, guid=self._guid)
@@ -1208,7 +1302,116 @@ class RSpec3Decoder(UNISDecoder):
         self._encode_children(doc, host, collection=collection, parent=parent, **kwargs)
         hosts.append(host)
         self.log.debug("_encode_rspec_host.end", guid=self._guid)
-        return {"hosts": host}
+        return {'hosts': hosts}
+    
+    def _encode_rspec_ip(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_rspec_ip.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["port"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+        
+        if "ip" not in geni_props:
+            geni_props["ip"] = {}
+        ip = geni_props["ip"]
+        
+        attrib = dict(doc.attrib)
+        # From common.rnc
+        address = attrib.pop('address')
+        netmask = attrib.pop('netmask', None)
+        ip_type = attrib.pop('type', None)
+        
+        if address:
+            ip['address'] = address.strip()
+        if netmask:
+            ip['netmask'] = netmask.strip()
+        if ip_type:
+            ip['type'] = ip_type.strip().lower()
+        else:
+            ip['type'] = "ipv4"
+        
+        parent["address"] = {
+            "address": ip['address'],
+            "type": ip['type'],
+        }
+        
+        if len(attrib) != 0:
+            self.log.warn("unparesd_attributes", attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self._encode_children(doc, ip, collection=collection, parent=parent, **kwargs)
+        self.log.debug("_encode_rspec_ip.end", guid=self._guid)
+        return {'ip': ip}
+    
+    def _encode_gemini_node(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_gemini_node.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["node"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+        
+        if "gemini" not in geni_props:
+            geni_props["gemini"] = {}
+        gemini_props = geni_props["gemini"]
+        
+        attrib = dict(doc.attrib)
+        # From common.rnc
+        node_type = attrib.pop('type')
+        
+        if node_type:
+            gemini_props['type'] = node_type.strip()
+        
+        if len(attrib) != 0:
+            self.log.warn("unparesd_attributes", attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self._encode_children(doc, gemini_props, collection=collection, parent=parent, **kwargs)
+        self.log.debug("_encode_gemini_node.end", guid=self._guid)
+        return {'gemini': gemini_props}
+        
+    def _encode_gemini_monitor_urn(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_gemini_node.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["node"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+        
+        if "gemini" not in geni_props:
+            geni_props["gemini"] = {}
+        gemini_props = geni_props["gemini"]
+        
+        attrib = dict(doc.attrib)
+        # From common.rnc
+        name = attrib.pop('name')
+        
+        if name:
+            gemini_props['monitor_urn'] = name.strip()
+        
+        if len(attrib) != 0:
+            self.log.warn("unparesd_attributes", attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self._encode_children(doc, gemini_props, collection=collection, parent=parent, **kwargs)
+        self.log.debug("_encode_gemini_node.end", guid=self._guid)
+        return {'gemini': gemini_props}
 
 
 class PSDecoder(UNISDecoder):
@@ -2038,9 +2241,7 @@ def pull_topology(url):
     envelope = make_envelope(query)
     return send_receive(url, envelope)
 
-def main():    
-    #print pull_topology("http://dc-2.grnoc.iu.edu:8012/perfSONAR_PS/services/topology")
-    #return
+def main():
     parser = argparse.ArgumentParser(
         description="Encodes RSpec V3 and the different perfSONAR's topologies to UNIS"
     )

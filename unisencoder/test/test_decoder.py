@@ -741,6 +741,14 @@ class RSpec3DecoderTest(unittest2.TestCase):
         out_ad = {}
         out_request = {}
         out_manifest = {}
+        manifest_expected = {
+            "$schema": self.schemas["domain"],
+            "urn": "urn",
+            "id": "urn",
+            "properties":
+                {"geni": attrib_manifest}
+        }
+        manifest_expected["properties"]["geni"]["slice_urn"] = "urn"
         # Act
         ret_common = lambda : self.encoder._encode_rspec(rspec_common, out_common)
         ret_ad = self.encoder._encode_rspec(rspec_ad, out_ad)
@@ -749,7 +757,7 @@ class RSpec3DecoderTest(unittest2.TestCase):
         # Assert
         self.assertEqual(encode_children_mock.called, True)
         self.assertEqual(out_ad, {"$schema": self.schemas["domain"], "properties": {"geni": attrib_ad}})
-        self.assertEqual(out_manifest, {"$schema": self.schemas["domain"], "properties": {"geni": attrib_manifest}})
+        self.assertEqual(out_manifest, manifest_expected)
         self.assertEqual(ret_ad, out_ad)
         self.assertEqual(ret_manifest, out_manifest)
     
@@ -829,6 +837,7 @@ class RSpec3DecoderTest(unittest2.TestCase):
             "$schema": self.schemas["node"],
             "properties": {"geni": attrib}
         }
+        expected["properties"]["geni"]["slice_urn"] = slice_urn
         # Act
         ret = self.encoder._encode_rspec_node(rspec, out,
             collection=collection, rspec_type="manifest", slice_urn=slice_urn)
@@ -919,10 +928,9 @@ class RSpec3DecoderTest(unittest2.TestCase):
                 "type": "mac",
                 "address": attrib["mac_address"]
             },
-            "properties": {
-                "geni": attrib
-            }
+            "properties": {"geni": attrib}
         }
+        expected["properties"]["geni"]["slice_urn"] = slice_urn
         # Act
         ret = self.encoder._encode_rspec_interface(rspec, out,
             collection=collection, rspec_type="manifest", slice_urn=slice_urn)
@@ -954,6 +962,75 @@ class RSpec3DecoderTest(unittest2.TestCase):
         self.assertEqual(out, {})
         self.assertEqual(ret, expected)
         self.assertEqual(parent, {"$schema": self.schemas["node"], "properties": {"geni": expected}})
+        self.assertEqual(collection, {})
+    
+    @patch.object(RSpec3Decoder, '_encode_children', mocksignature=True)
+    def test_encode_rspec_host(self, encode_children_mock):
+        # Arrange
+        rspec = etree.Element("{%s}host" % self.rspec3)
+        hostname = "test.test.com"
+        attrib = {
+            "name": hostname
+        }
+        rspec.attrib.update(attrib)
+        out = {}
+        collection = {}
+        expected = {
+            "hosts": [
+                {"hostname": hostname}
+            ]
+        }
+        parent = {"$schema": self.schemas["node"]}
+        # Act
+        ret = self.encoder._encode_rspec_host(rspec, out, collection, parent)
+        # Assert
+        self.assertEqual(encode_children_mock.called, True)
+        self.assertEqual(out, {})
+        self.assertEqual(ret, expected)
+        self.assertEqual(parent,
+            {
+                "$schema": self.schemas["node"],
+                "id": hostname,
+                "properties": {"geni": expected}
+            }
+        )
+        self.assertEqual(collection, {})
+    
+    @patch.object(RSpec3Decoder, '_encode_children', mocksignature=True)
+    def test_encode_rspec_ip(self, encode_children_mock):
+        # Arrange
+        rspec = etree.Element("{%s}ip" % self.rspec3)
+        attrib = {
+            "address": "127.0.0.1",
+            "netmask": "255.0.0.0",
+            "type": "ipv4",
+        }
+        rspec.attrib.update(attrib)
+        out = {}
+        collection = {}
+        expected = {
+            "ip": {
+                "address": "127.0.0.1",
+                "netmask": "255.0.0.0",
+                "type": "ipv4",
+            }
+        }
+        parent = {"$schema": self.schemas["port"]}
+        expected_parent = {
+            "$schema": self.schemas["port"],
+            "address": {
+                "address": "127.0.0.1",
+                "type": "ipv4"
+            },
+            "properties": {"geni": expected}
+        }
+        # Act
+        ret = self.encoder._encode_rspec_ip(rspec, out, collection, parent)
+        # Assert
+        self.assertEqual(encode_children_mock.called, True)
+        self.assertEqual(out, {})
+        self.assertEqual(ret, expected)
+        self.assertEqual(parent, expected_parent)
         self.assertEqual(collection, {})
     
     @patch.object(RSpec3Decoder, '_encode_children', mocksignature=True)
