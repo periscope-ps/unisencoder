@@ -307,11 +307,26 @@ class RSpec3Decoder(UNISDecoder):
         rspec_type = attrib.pop('type', "")
         rspec_type = rspec_type.strip()
         
+        # Some validation of Inpu
         if rspec_type not in [RSpec3Decoder.RSpecADV, RSpec3Decoder.RSpecManifest]:
+            self.log.debug("_encode_rspec.end", guid=self._guid)
             raise UNISDecoderException("Unsupported rspec type '%s'" % rspec_type)
-        if rspec_type == RSpec3Decoder.RSpecManifest and kwargs.get("slice_urn", None) is None:
-            raise UNISDecoderException("A slice_urn must be provided with Rspec type of manifest " % rspec_type)
         
+        if rspec_type == RSpec3Decoder.RSpecManifest and kwargs.get("slice_urn", None) is None:
+            self.log.debug("_encode_rspec.end", guid=self._guid)
+            self.log.error("no_slice_urn", guid=self._guid)
+            self.log.debug("_encode_rspec.end", guid=self._guid)
+            raise UNISDecoderException("slice_urn must be provided "
+                "when decoding manifest.")
+         
+        if rspec_type == RSpec3Decoder.RSpecADV and kwargs.get("component_manager_id", None) is None:
+            self.log.debug("_encode_rspec.end", guid=self._guid)
+            self.log.error("no_component_manager_id", guid=self._guid)
+            self.log.debug("_encode_rspec.end", guid=self._guid)
+            raise UNISDecoderException("component_manager_id must be "
+                "provided when decoding advertisment rspec.")
+        
+        # Building GENI properties
         if generated is not None:
             geni_props['generated'] = generated.strip()
         if generated_by is not None:
@@ -322,15 +337,22 @@ class RSpec3Decoder(UNISDecoder):
             geni_props['type'] = rspec_type.strip()
         kwargs.pop("parent", None)
         collection = kwargs.pop("collection", out)
-        self._encode_children(doc, out, rspec_type=rspec_type,
-            collection=collection, parent=out, **kwargs)
         
+         # Generating URN
         if rspec_type == RSpec3Decoder.RSpecManifest:
-            slice_urn = kwargs.get("slice_urn")            
+            slice_urn = kwargs.get("slice_urn", None)            
             out["urn"] = slice_urn
             geni_props['slice_urn'] = slice_urn
             out["id"] = self.geni_urn_to_id(slice_urn)
-            
+        elif rspec_type == RSpec3Decoder.RSpecADV:
+            component_manager_id = kwargs.get("component_manager_id", None)            
+            out["id"] = self.geni_urn_to_id(component_manager_id)
+            out["urn"] = component_manager_id
+        
+        # Iterate children
+        self._encode_children(doc, out, rspec_type=rspec_type,
+            collection=collection, parent=out, **kwargs)
+        
         if len(attrib) > 0:
             self.log.warn("unpares_attribute.warn", attribs=attrib, guid=self._guid)
             sys.stderr.write("Unparsed attributes: %s\n" % attrib)
@@ -935,7 +957,7 @@ class RSpec3Decoder(UNISDecoder):
         default = attrib.pop('default', None)
         
         if name is not None:
-                sliver_type["name"] = name.strip()
+            sliver_type["name"] = name.strip()
         if default is not None:
             sliver_type["default"] = default.strip()
         
@@ -2253,6 +2275,8 @@ def main():
         help='Log file.')
     parser.add_argument('--slice_urn', type=str, default=None,
         help='Slice URN.')
+    parser.add_argument('-m', '--component_manager_id', type=str, default=None,
+        help='The URN of the component manager of the advertisment RSpec.')
     parser.add_argument('--indent', type=int, default=2,
         help='JSON output indent.')
     parser.add_argument('filename', type=str, help='Input file.')    
@@ -2270,10 +2294,13 @@ def main():
     
     if args.type == "rspec3":
         encoder = RSpec3Decoder()
+        kwargs = dict(slice_urn=args.slice_urn,
+            component_manager_id=args.component_manager_id)
     elif args.type == "ps":
         encoder = PSDecoder()
+        kwargs = dict()
     
-    topology_out = encoder.encode(topology, slice_urn=args.slice_urn)
+    topology_out = encoder.encode(topology, **kwargs)
 
     if args.output is None:
         out_file = sys.stdout

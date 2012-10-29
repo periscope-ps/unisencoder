@@ -751,12 +751,13 @@ class RSpec3DecoderTest(unittest2.TestCase):
         manifest_expected["properties"]["geni"]["slice_urn"] = "urn"
         # Act
         ret_common = lambda : self.encoder._encode_rspec(rspec_common, out_common)
-        ret_ad = self.encoder._encode_rspec(rspec_ad, out_ad)
+        ret_ad = self.encoder._encode_rspec(rspec_ad, out_ad, component_manager_id="urn")
         ret_request = lambda : self.encoder._encode_rspec(rspec_request, out_request)
         ret_manifest = self.encoder._encode_rspec(rspec_manifest, out_manifest, slice_urn="urn")
         # Assert
         self.assertEqual(encode_children_mock.called, True)
-        self.assertEqual(out_ad, {"$schema": self.schemas["domain"], "properties": {"geni": attrib_ad}})
+        self.assertEqual(out_ad, {"$schema": self.schemas["domain"],
+            "urn": "urn", "id": "urn", "properties": {"geni": attrib_ad}})
         self.assertEqual(out_manifest, manifest_expected)
         self.assertEqual(ret_ad, out_ad)
         self.assertEqual(ret_manifest, out_manifest)
