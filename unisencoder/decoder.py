@@ -352,9 +352,12 @@ class RSpec3Decoder(UNISDecoder):
         
          # Generating URN
         if rspec_type == RSpec3Decoder.RSpecManifest:
-            slice_urn = kwargs.get("slice_urn", None)            
+            slice_urn = kwargs.get("slice_urn", None)
+            geni_props['slice_urn'] = slice_urn            
             out["urn"] = slice_urn
-            geni_props['slice_urn'] = slice_urn
+            slice_uuid = kwargs.get("slice_uuid")
+            if slice_uuid is not None:
+                geni_props['slice_uuid'] = slice_uuid
             out["id"] = self.geni_urn_to_id(slice_urn)
             slice_uuid = kwargs.get("slice_uuid")
             if slice_uuid is not None:
