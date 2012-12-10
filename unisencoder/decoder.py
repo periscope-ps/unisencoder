@@ -634,6 +634,10 @@ class RSpec3Decoder(UNISDecoder):
                     if not interface_id:
                         raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
                     element = self._find_component_id(interface_id, "interface")
+                    if element is None:
+                        self.log.warn("ref_doesnot_exist", interface=interface,
+                            guid=self._guid)
+                        return
                 hrefs.append(self._make_self_link(element, rspec_type=rspec_type))
             link["directed"] = False
             link["endpoints"] = [
@@ -800,6 +804,8 @@ class RSpec3Decoder(UNISDecoder):
         return {"available": available}
     
     def _make_self_link(self, element, rspec_type=None):
+        if element is None:
+            raise UNISDecoderException("Cannot make self link to NONE")
         if rspec_type == RSpec3Decoder.RSpecManifest:
             urn = element.get("sliver_id", None)
         else:
