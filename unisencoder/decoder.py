@@ -1461,6 +1461,10 @@ class PSDecoder(UNISDecoder):
         self._jsonpath_cache = {}
         self._urn_cache = {}
         self._ignored_namespaces = [PSDecoder.nml]
+        # Resolving jsonpath is expensive operation
+        # This cache keeps track of jsonpath used to replaced in the end
+        # with jsonpointers
+        self._subsitution_cache = {}
         
         self._handlers = {
             "{%s}%s" % (PSDecoder.nmtb, "topology") : self._encode_topology,
@@ -1534,6 +1538,13 @@ class PSDecoder(UNISDecoder):
         else:
             sys.stderr.write("No handler for: %s\n" % root.tag)
         self.log.debug("encode.end", guid=self._guid)
+        sout = json.dumps(out)
+        
+        # This is an optimization hack to make every jsonpath a jsonpointer
+        for urn, jpath in self._subsitution_cache.iteritems():
+            if urn in self._jsonpath_cache:
+                sout = sout.replace(jpath, self._jsonpath_cache[urn])
+        out = json.loads(sout)
         return out
     
     def _parse_xml_bool(self, xml_bool):
@@ -1949,8 +1960,9 @@ class PSDecoder(UNISDecoder):
         if add_urn:
             if jpath.endswith("]"):
                 jpath = jpath[:jpath.rindex("[")]
-            jpath += "[?(@.urn==\"%s\")]" % urn
+            jpath += "[?(@.urn=='%s')]" % urn        
         self._jsonpath_cache[urn] = jpath
+        self._subsitution_cache[urn] = jpath
         return jpath
             
     def _find_urn(self, urn, try_hard=False):
