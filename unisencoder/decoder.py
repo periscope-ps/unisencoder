@@ -160,6 +160,10 @@ class RSpec3Decoder(UNISDecoder):
             "http://www.protogeni.net/resources/rspec/ext/flack/1",
             "http://www.protogeni.net/resources/rspec/ext/client/1",
         ]
+        # Resolving jsonpath is expensive operation
+        # This cache keeps track of jsonpath used to replaced in the end
+        # with jsonpointers
+        self._subsitution_cache = {}
         
         self._handlers = {
             "{%s}%s" % (RSpec3Decoder.rspec3, "rspec") : self._encode_rspec,
@@ -276,7 +280,14 @@ class RSpec3Decoder(UNISDecoder):
                 parent=out, slice_urn=slice_urn, **kwargs)
         else:
             sys.stderr.write("No handler for: %s\n" % root.tag)
-            
+        
+        sout = json.dumps(out)
+        # This is an optimization hack to make every jsonpath a jsonpointer
+        for urn, jpath in self._subsitution_cache.iteritems():
+            if urn in self._jsonpath_cache:
+                sout = sout.replace(jpath, self._jsonpath_cache[urn])
+        out = json.loads(sout)
+        
         self.log.debug("encode.end", guid=self._guid)
         return out
     
@@ -819,6 +830,15 @@ class RSpec3Decoder(UNISDecoder):
         if urn in self._urn_cache:
             return self._urn_cache[urn]
        
+        if rspec_type == RSpec3Decoder.RSpecManifest:
+            jpath += "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
+        else:
+            jpath += "[?(@.urn==\"%s\")]" % urn
+                
+        self._urn_cache[urn] = jpath
+        self._subsitution_cache[urn] = jpath
+        return
+        
         # Try to construct xpath to make the lookup easier
         xpath = self._tree.getpath(element)
         
@@ -867,6 +887,7 @@ class RSpec3Decoder(UNISDecoder):
             else:
                 jpath += "[?(@.urn==\"%s\")]" % urn
         self._urn_cache[urn] = jpath
+        self._subsitution_cache[urn] = jpath
         return jpath
     
     def _find_sliver_id(self, urn, component_type, try_hard=False):
