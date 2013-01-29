@@ -150,6 +150,7 @@ class RSpec3Decoder(UNISDecoder):
         self._tree = None
         self._root = None
         self._jsonpointer_path = "#/"
+        self._jsonpath_cache = {}
         self._urn_cache = {}
         self._component_id_cache = {}
         self._sliver_id_cache = {}
@@ -831,9 +832,9 @@ class RSpec3Decoder(UNISDecoder):
             return self._urn_cache[urn]
        
         if rspec_type == RSpec3Decoder.RSpecManifest:
-            jpath += "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
+            jpath = "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
         else:
-            jpath += "[?(@.urn==\"%s\")]" % urn
+            jpath = "[?(@.urn==\"%s\")]" % urn
                 
         self._urn_cache[urn] = jpath
         self._subsitution_cache[urn] = jpath
