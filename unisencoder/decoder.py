@@ -831,14 +831,15 @@ class RSpec3Decoder(UNISDecoder):
         if urn in self._urn_cache:
             return self._urn_cache[urn]
        
-        if rspec_type == RSpec3Decoder.RSpecManifest:
-            jpath = "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
-        else:
-            jpath = "[?(@.urn==\"%s\")]" % urn
+        # TODO (AH) : Improve generating json paths
+        #if rspec_type == RSpec3Decoder.RSpecManifest:
+        #    jpath = "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
+        #else:
+        #    jpath = "[?(@.urn==\"%s\")]" % urn
                 
-        self._urn_cache[urn] = jpath
-        self._subsitution_cache[urn] = jpath
-        return
+        #self._urn_cache[urn] = jpath
+        #self._subsitution_cache[urn] = jpath
+        #return
         
         # Try to construct xpath to make the lookup easier
         xpath = self._tree.getpath(element)
