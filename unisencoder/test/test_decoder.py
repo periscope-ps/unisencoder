@@ -374,7 +374,7 @@ class PSDecoderTest(unittest2.TestCase):
     def test_encode_ctrl_link_not_inside_port(self, encode_children_mock):
         # Arrang
         urn1 = "urn:ogf:network:domain=d:node=n:port=p:link=link1"
-        urn2 = "urn:ogf:network:domain=d:node=n:port=p:link=link2"
+        urn2 = "urn:ogf:network:domain=d:node=n:port=p2:link=link2"
         ctrl_link = etree.Element("{%s}link" % self.ctrl)
         ctrl_link.attrib["id"] = urn1
         ctrl_remoteLink = etree.SubElement(ctrl_link, "{%s}remoteLinkId" % self.ctrl)

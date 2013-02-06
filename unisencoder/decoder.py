@@ -1902,16 +1902,21 @@ class PSDecoder(UNISDecoder):
         
         # Make sure that the link is in the current doc
         remote_link = remote_link.text.strip()
-        remote_port = ":".join(remote_link.split(":")[:-1])
-        found_element = self._find_urn(remote_port, try_hard=True)
-        if found_element is not None:
-            # Convert xpath to json pointer to make it faster for eval
-            selfRef = self._make_self_link(found_element)
-            remote_port = '%s' % (selfRef)
+        link_parts = remote_link.split(":")
+        remote_port = ":".join(link_parts[:-1])
+        
+        if remote_link.endswith(':site') or remote_link.endswith(':link=site'):
+            link['endpoints'].append({"href": remote_link, "rel": "full"})
         else:
-            self.log.warn("remoteLinkID_not_found", urn=remote_link,
-                link=doc.attrib.get('id', None), guid=self._guid)
-        link['endpoints'].append({"href": remote_port, "rel": "full"})
+            found_element = self._find_urn(remote_port, try_hard=True)
+            if found_element is not None:
+                # Convert xpath to json pointer to make it faster for eval
+                selfRef = self._make_self_link(found_element)
+                remote_port = '%s' % (selfRef)
+            else:
+                self.log.warn("remoteLinkID_not_found", urn=remote_link,
+                    link=doc.attrib.get('id', None), guid=self._guid)
+            link['endpoints'].append({"href": remote_port, "rel": "full"})
         if link['directed'] == True:
             link['endpoints'] = {
                 "source": link['endpoints'][0],
