@@ -34,6 +34,7 @@ setup(
         "unittest2",
         "netlogger>=4.3.0",
         "mock==0.8.0",
+	"python-dateutil<2.0"
     ],
     entry_points = {
         'console_scripts': [

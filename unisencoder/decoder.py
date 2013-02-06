@@ -356,6 +356,9 @@ class RSpec3Decoder(UNISDecoder):
             out["urn"] = slice_urn
             geni_props['slice_urn'] = slice_urn
             out["id"] = self.geni_urn_to_id(slice_urn)
+            slice_uuid = kwargs.get("slice_uuid")
+            if slice_uuid is not None:
+                geni_props['slice_uuid'] = slice_uuid
         elif rspec_type == RSpec3Decoder.RSpecADV:
             component_manager_id = kwargs.get("component_manager_id", None)            
             out["id"] = self.geni_urn_to_id(component_manager_id)
@@ -420,7 +423,11 @@ class RSpec3Decoder(UNISDecoder):
             geni_props['exclusive'] = self._parse_xml_bool(exclusive)
         if colocate is not None:
             geni_props['colocate'] = colocate.strip()
-        
+
+        slice_uuid = kwargs.get("slice_uuid")
+        if slice_uuid is not None:
+            geni_props['slice_uuid'] = slice_uuid
+    
         # Set URN, ID, and name
         rspec_type = kwargs.get("rspec_type", None)
         if rspec_type == RSpec3Decoder.RSpecADV:
@@ -510,6 +517,10 @@ class RSpec3Decoder(UNISDecoder):
                 "type": "mac",
                 "address": geni_props['mac_address']
             }
+
+        slice_uuid = kwargs.get("slice_uuid")
+        if slice_uuid is not None:
+            geni_props['slice_uuid'] = slice_uuid
         
         # Set URN, ID, and name
         rspec_type = kwargs.get("rspec_type", None)
@@ -599,8 +610,11 @@ class RSpec3Decoder(UNISDecoder):
             geni_props['vlantag'] = vlantag.strip()
         if sliver_id is not None:
             geni_props['sliver_id'] = sliver_id.strip()
+
+        slice_uuid = kwargs.get("slice_uuid")
+        if slice_uuid is not None:
+            geni_props['slice_uuid'] = slice_uuid
             
-        
         # Set URN, ID, and name
         rspec_type = kwargs.get("rspec_type", None)
         if rspec_type == RSpec3Decoder.RSpecADV:
@@ -2309,6 +2323,12 @@ def pull_topology(url):
     envelope = make_envelope(query)
     return send_receive(url, envelope)
 
+class Usage(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+    def __str__(self):
+        return repr(self.msg)
+
 def main():
     parser = argparse.ArgumentParser(
         description="Encodes RSpec V3 and the different perfSONAR's topologies to UNIS"
@@ -2321,6 +2341,8 @@ def main():
         help='Log file.')
     parser.add_argument('--slice_urn', type=str, default=None,
         help='Slice URN.')
+    parser.add_argument('--slice_cred', type=str, default=None,
+        help='Slice credential file (XML)')
     parser.add_argument('-m', '--component_manager_id', type=str, default=None,
         help='The URN of the component manager of the advertisment RSpec.')
     parser.add_argument('--indent', type=int, default=2,
@@ -2334,14 +2356,39 @@ def main():
         in_file = sys.stdin
     else:
         in_file = open(args.filename, 'r')
-    
+
+    try:
+        if args.slice_cred and args.slice_urn:
+            raise Usage("Must specify only one of '--slice_urn' or '--slice_cred'")
+        elif args.slice_cred:
+            from sfa.trust.credential import Credential as GENICredential
+            import hashlib
+            try:
+                cred = GENICredential(filename=args.slice_cred)
+                slice_urn = cred.get_gid_object().get_urn()
+                slice_uuid = cred.get_gid_object().get_uuid()
+                if not slice_uuid:
+                    slice_uuid = hashlib.md5(cred.get_gid_object().get_urn()).hexdigest()
+                    slice_uuid = str(uuid.UUID(slice_uuid))
+                else:
+                    slice_uuid = str(uuid.UUID(int=slice_uuid))
+            except Exception, msg:
+                raise Usage(msg)
+        else:
+            slice_urn = args.slice_urn
+            slice_uuid = None
+    except Usage, err:
+        print >>sys.stderr, err.msg
+        return
+
     topology = etree.parse(in_file)
     in_file.close()
     
     if args.type == "rspec3":
         encoder = RSpec3Decoder()
-        kwargs = dict(slice_urn=args.slice_urn,
-            component_manager_id=args.component_manager_id)
+        kwargs = dict(slice_urn=slice_urn,
+                      slice_uuid=slice_uuid,
+                      component_manager_id=args.component_manager_id)
     elif args.type == "ps":
         encoder = PSDecoder()
         kwargs = dict()
