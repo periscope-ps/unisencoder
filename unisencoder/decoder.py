@@ -653,11 +653,20 @@ class RSpec3Decoder(UNISDecoder):
         if len(interface_refs) == 2:
             hrefs = []
             for interface in interface_refs:
+                sliver_id = None
+                client_id = None
+                
                 if rspec_type == RSpec3Decoder.RSpecManifest:
-                    interface_id = interface["sliver_id"]
-                    if not interface_id:
+                    sliver_id = interface.get("sliver_id", None)
+                    client_id = interface.get("client_id", None)
+                    element = None
+                    if not sliver_id and not client_id:
                         raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
-                    element = self._find_sliver_id(interface_id, "interface")
+                    interface_id = interface.get("client_id", None)
+                    if sliver_id:
+                        element = self._find_sliver_id(interface_id, "interface")
+                    if client_id and not element:
+                        element = self._find_client_id(client_id, "interface")                
                 else:
                     interface_id = interface.get("component_id", None)
                     if not interface_id:
@@ -667,7 +676,8 @@ class RSpec3Decoder(UNISDecoder):
                         self.log.warn("ref_doesnot_exist", interface=interface,
                             guid=self._guid)
                         return
-                hrefs.append(self._make_self_link(element, rspec_type=rspec_type))
+                use_client_id = not not client_id
+                hrefs.append(self._make_self_link(element, rspec_type=rspec_type, use_client_id=use_client_id))
             link["directed"] = False
             link["endpoints"] = [
                 {
@@ -768,7 +778,6 @@ class RSpec3Decoder(UNISDecoder):
                         link["capacity"] = float(ends_id[0]["props"]["capacity"])
         
         if link.get("endpoints", None) is None:
-            print json.dumps(link, indent=2)
             raise UNISDecoderException(
                 "Cannot accept link with no endpoints in %s " % \
                 etree.tostring(doc, pretty_print=True)
@@ -832,16 +841,16 @@ class RSpec3Decoder(UNISDecoder):
         self.log.debug("_encode_rspec_available.end", guid=self._guid)
         return {"available": available}
     
-    def _make_self_link(self, element, rspec_type=None):
+    def _make_self_link(self, element, rspec_type=None, use_client_id=False):
         if element is None:
             raise UNISDecoderException("Cannot make self link to NONE")
         if rspec_type == RSpec3Decoder.RSpecManifest:
-            urn = element.get("sliver_id", None)
+            urn = element.get("sliver_id", None) or element.get("client_id", None)
         else:
             urn = element.get("component_id", None)
-            
+        
         if not urn:
-            raise UNISDecoderException("Cannot link to an element withour URN")
+            raise UNISDecoderException("Cannot link to an element without URN or sliver_id or client_id")
         
         # First try cache
         urn = unquote(urn.strip())
@@ -902,7 +911,10 @@ class RSpec3Decoder(UNISDecoder):
             if jpath.endswith("]"):
                 jpath = jpath[:jpath.rindex("[")]
             if rspec_type == RSpec3Decoder.RSpecManifest:
-                jpath += "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
+                if use_client_id:
+                    jpath += "[?(@.properties.geni.client_id==\"%s\")]" % urn
+                else:
+                    jpath += "[?(@.properties.geni.sliver_id==\"%s\")]" % urn
             else:
                 jpath += "[?(@.urn==\"%s\")]" % urn
         self._urn_cache[urn] = jpath
@@ -943,6 +955,37 @@ class RSpec3Decoder(UNISDecoder):
         self._sliver_id_cache[urn] = result
         self.log.debug("_find_sliver_id.end", guid=self._guid, urn=urn)
         return result
+    
+    def _find_client_id(self, urn, component_type, try_hard=False):
+        """
+        Looks for the any element with client_id == urn and of type
+        component_type. component_type examples: interface and node.
+        This method trys all special cases I've seen and issues a
+        warning log if the URN found but was not in the right format.
+        """
+        def escape_urn(u):
+            return u.replace("/", "%2F").replace("#", "%23")
+        
+        self.log.debug("_find_client_id.start", guid=self._guid, urn=urn)
+        if self._root is None:
+            self.log.debug("_find_client_id.end", guid=self._guid, urn=urn)
+            return None
+        xpath = ".//rspec:%s[@client_id='%s']" % (component_type, urn)
+        if try_hard == True:
+            escaped_urn = escape_urn(urn)
+            xpath = ".//rspec:%s[@client_id='%s' or @client_id='%s']" \
+                % (component_type, urn, escaped_urn)
+        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.rspec3})
+        if len(result) > 1:
+            self.log.debug("_find_client_id.end", guid=self._guid, urn=urn)
+            raise UNISDecoderException("Found more than one node with the URN '%s'" % urn)
+        elif len(result) == 1:
+            result = result[0]
+        else:
+            result = None
+        self.log.debug("_find_client_id.end", guid=self._guid, urn=urn)
+        return result
+    
     
     def _find_component_id(self, urn, component_type, try_hard=False):
         """
@@ -1958,7 +2001,7 @@ class PSDecoder(UNISDecoder):
     def _make_self_link(self, element):
         urn = element.get("id", None)
         if not urn:
-            raise UNISDecoderException("Cannot link to an element withour URN")
+            raise UNISDecoderException("Cannot link to an element without URN")
         
         # First try cache
         urn = self._parse_urn(urn)
