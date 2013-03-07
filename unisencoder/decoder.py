@@ -1645,6 +1645,7 @@ class PSDecoder(UNISDecoder):
         urn = doc.attrib.get('id', None)
         if urn:
             out["urn"] = self._parse_urn(urn)
+            out["id"] = PSDecoder.create_id(out["urn"])
         out["$schema"] = UNISDecoder.SCHEMAS["topology"]
         self._encode_children(doc, out, **kwargs)
         self.log.debug("_encode_topology.end", guid=self._guid)
