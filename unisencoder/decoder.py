@@ -680,7 +680,9 @@ class RSpec3Decoder(UNISDecoder):
         # First try to establish links by interface_ref
         interface_refs = geni_props.get("interface_refs", [])
         link_shared_vlans = geni_props.get("link_shared_vlans", [])
-        if len(interface_refs) == 2:
+        # XXX (EK): allow links with more than 2 interface_refs
+        # first two endpoints are used
+        if len(interface_refs) >= 2:
             hrefs = []
             for interface in interface_refs:
                 sliver_id = None
@@ -719,6 +721,21 @@ class RSpec3Decoder(UNISDecoder):
                     "rel": "full"
                 }
             ]
+        # ProtoGENI lets you add "LAN" nodes
+        # links with client_id "lanX" are basically switches
+        elif len(interface_refs) > 2:
+            lan_node = {}
+            lan_node["$schema"] = UNISDecoder.SCHEMAS["node"]
+            lan_node["name"] = link["name"]
+            lan_node["urn"] = RSpec3Decoder.rspec_create_urn(slice_urn+"+node+"+link["name"])
+            lan_node["id"] = self.geni_urn_to_id(slice_urn+"_node_"+link["name"])            
+
+            # Make a node
+            # Make fake ports on this node
+            # Create links for each interface_ref to these ports for each client_id
+            
+            # XXX (EK): For now we just make one end point so parsing continues
+            # hacked conditional above
         elif len(link_shared_vlans):
             hrefs = []
             if len(interface_refs):
@@ -735,8 +752,8 @@ class RSpec3Decoder(UNISDecoder):
                     hrefs.append(self._make_self_link(element, rspec_type=rspec_type, use_client_id=use_client_id))
 
             for shared_vlan in link_shared_vlans:
-                if 'name' in shared_vlan:
-                    hrefs.append("link to %s endpoint" % shared_vlan['name'])
+                if "name" in shared_vlan:
+                    hrefs.append("link to %s endpoint" % shared_vlan["name"])
                 else:
                     hrefs.append("unresolveable sharedvlan endpoint")
 
