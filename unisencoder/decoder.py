@@ -139,6 +139,7 @@ class RSpec3Decoder(UNISDecoder):
     
     rspec3 = "http://www.geni.net/resources/rspec/3"
     gemini = "http://geni.net/resources/rspec/ext/gemini/1"
+    sharedvlan = "http://www.geni.net/resources/rspec/ext/shared-vlan/1"
     
     RSpecADV = "advertisement"
     RSpecRequest = "request"
@@ -185,6 +186,7 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
             "{%s}%s" % (RSpec3Decoder.gemini, "node") : self._encode_gemini_node,
             "{%s}%s" % (RSpec3Decoder.gemini, "monitor_urn") : self._encode_gemini_monitor_urn,
+            "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
         }
 
     def _encode_children(self, doc, out, **kwargs):
@@ -294,6 +296,7 @@ class RSpec3Decoder(UNISDecoder):
                     "{%s}%s" % (RSpec3Decoder.rspec3, "property") : self._encode_rspec_property,
                     "{%s}%s" % (RSpec3Decoder.rspec3, "host") : self._encode_rspec_host,
                     "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
+                    "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,                    
                     })
             
         tree = self._refactor_default_xmlns(tree)
@@ -676,6 +679,7 @@ class RSpec3Decoder(UNISDecoder):
         
         # First try to establish links by interface_ref
         interface_refs = geni_props.get("interface_refs", [])
+        link_shared_vlans = geni_props.get("link_shared_vlans", [])
         if len(interface_refs) == 2:
             hrefs = []
             for interface in interface_refs:
@@ -704,6 +708,38 @@ class RSpec3Decoder(UNISDecoder):
                         return
                 use_client_id = not not client_id
                 hrefs.append(self._make_self_link(element, rspec_type=rspec_type, use_client_id=use_client_id))
+            link["directed"] = False
+            link["endpoints"] = [
+                {
+                    "href": hrefs[0],
+                    "rel": "full"
+                },
+                {
+                    "href": hrefs[1],
+                    "rel": "full"
+                }
+            ]
+        elif len(link_shared_vlans):
+            hrefs = []
+            if len(interface_refs):
+                for interface in interface_refs:
+                    interface_id = interface.get("component_id", None)
+                    if not interface_id:
+                        raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
+                    element = self._find_component_id(interface_id, "interface")
+                    if element is None:
+                        self.log.warn("ref_doesnot_exist", interface=interface,
+                                      guid=self._guid)
+                        return
+                    use_client_id = not not client_id
+                    hrefs.append(self._make_self_link(element, rspec_type=rspec_type, use_client_id=use_client_id))
+
+            for shared_vlan in link_shared_vlans:
+                if 'name' in shared_vlan:
+                    hrefs.append("link to %s endpoint" % shared_vlan['name'])
+                else:
+                    hrefs.append("unresolveable sharedvlan endpoint")
+
             link["directed"] = False
             link["endpoints"] = [
                 {
@@ -1358,6 +1394,39 @@ class RSpec3Decoder(UNISDecoder):
         interface_refs.append(interface_ref)
         self.log.debug("_encode_rspec_interface_ref.end", guid=self._guid)
         return {"interface_refs": interface_refs}
+
+    def _encode_sharedvlan_link_shared_vlan(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_sharedvlan_link_shared_vlan.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["link"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+
+        if "link_shared_vlans" not in geni_props:
+            geni_props["link_shared_vlans"] = []
+        shared_vlans = geni_props["link_shared_vlans"]
+        shared_vlan = {}
+        
+        attrib = dict(doc.attrib)
+
+        name = attrib.pop('name', None)
+        vlantag = attrib.pop('vlantag', None)
+
+        if name:
+            shared_vlan['name'] = name
+        if vlantag:
+            shared_vlan['vlantag'] = vlantag
+
+        
+        self._encode_children(doc, shared_vlan, collection=collection, parent=parent, **kwargs)
+        shared_vlans.append(shared_vlan)
+        return {"link_shared_vlans": shared_vlans}
 
     def _encode_rspec_property(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_rspec_property.start", guid=self._guid)
