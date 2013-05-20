@@ -165,7 +165,7 @@ class RSpec3Decoder(UNISDecoder):
         # This cache keeps track of jsonpath used to replaced in the end
         # with jsonpointers
         self._subsitution_cache = {}
-        
+
         self._handlers = {
             "{%s}%s" % (RSpec3Decoder.rspec3, "rspec") : self._encode_rspec,
             "{%s}%s" % (RSpec3Decoder.rspec3, "node") : self._encode_rspec_node,
@@ -186,7 +186,7 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (RSpec3Decoder.gemini, "node") : self._encode_gemini_node,
             "{%s}%s" % (RSpec3Decoder.gemini, "monitor_urn") : self._encode_gemini_monitor_urn,
         }
-    
+
     def _encode_children(self, doc, out, **kwargs):
         """Iterates over the all child nodes and process and call the approperiate
         handler for each one."""
@@ -220,8 +220,8 @@ class RSpec3Decoder(UNISDecoder):
             exclude_prefixes +="ns%d " % x
         if exclude_ns != "":
             exclude_prefixes = 'exclude-result-prefixes="%s"\n' % exclude_prefixes 
-            
-            
+
+
         XSLT = """
         <xsl:stylesheet version="1.0" 
            xmlns:xsl="http://www.w3.org/1999/XSL/Transform" 
@@ -270,12 +270,38 @@ class RSpec3Decoder(UNISDecoder):
     def encode(self, tree, slice_urn=None, **kwargs):
         self.log.debug("encode.start", guid=self._guid)
         out = {}
+        
+        # also handle ProtoGENI RSpec v2 (on which GENI RSpec v3 is based)
+        # we just overload rspec3 with rspec2 namespace
+        rspec2 = "http://www.protogeni.net/resources/rspec/2"
+        root = tree.getroot()
+        if root.tag in ["{%s}rspec" % rspec2]:
+            RSpec3Decoder.rspec3 = rspec2
+            self._handlers.update({
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "rspec") : self._encode_rspec,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "node") : self._encode_rspec_node,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "location") : self._encode_rspec_location,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "hardware_type") : self._encode_rspec_hardware_type,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "interface") : self._encode_rspec_interface,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "available") : self._encode_rspec_available,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "sliver_type") : self._encode_rspec_sliver_type,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "disk_image") : self._encode_rspec_disk_image,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "relation") : self._encode_rspec_relation,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "link") : self._encode_rspec_link,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "link_type") : self._encode_rspec_link_type,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "component_manager") : self._encode_rspec_component_manager,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "interface_ref") : self._encode_rspec_interface_ref,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "property") : self._encode_rspec_property,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "host") : self._encode_rspec_host,
+                    "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
+                    })
+            
         tree = self._refactor_default_xmlns(tree)
         root = tree.getroot()
         self._tree = tree
         self._root = root
-        self._parent_collection = out
-        
+        self._parent_collection = out            
+
         if root.tag in self._handlers:
             self._handlers[root.tag](root, out, collection=out,
                 parent=out, slice_urn=slice_urn, **kwargs)
@@ -319,7 +345,7 @@ class RSpec3Decoder(UNISDecoder):
         rspec_type = attrib.pop('type', "")
         rspec_type = rspec_type.strip()
         
-        # Some validation of Inpu
+        # Some validation of Input
         if rspec_type not in [RSpec3Decoder.RSpecADV, RSpec3Decoder.RSpecManifest]:
             self.log.debug("_encode_rspec.end", guid=self._guid)
             raise UNISDecoderException("Unsupported rspec type '%s'" % rspec_type)
