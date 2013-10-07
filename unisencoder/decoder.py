@@ -740,10 +740,11 @@ class RSpec3Decoder(UNISDecoder):
             hrefs = []
             if len(interface_refs):
                 for interface in interface_refs:
-                    interface_id = interface.get("component_id", None)
+                    interface_id = interface.get("sliver_id", None)
+                    client_id = interface.get("client_id", None)
                     if not interface_id:
                         raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
-                    element = self._find_component_id(interface_id, "interface")
+                    element = self._find_sliver_id(interface_id, "interface")
                     if element is None:
                         self.log.warn("ref_doesnot_exist", interface=interface,
                                       guid=self._guid)
