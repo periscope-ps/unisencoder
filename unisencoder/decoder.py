@@ -298,7 +298,8 @@ class RSpec3Decoder(UNISDecoder):
                     "{%s}%s" % (RSpec3Decoder.rspec3, "property") : self._encode_rspec_property,
                     "{%s}%s" % (RSpec3Decoder.rspec3, "host") : self._encode_rspec_host,
                     "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
-                    "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,                    
+                    "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
+                    "{%s}%s" % (RSpec3Decoder.sharedvlan_pg, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
                     })
             
         tree = self._refactor_default_xmlns(tree)
