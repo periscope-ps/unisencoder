@@ -140,6 +140,7 @@ class RSpec3Decoder(UNISDecoder):
     rspec3 = "http://www.geni.net/resources/rspec/3"
     gemini = "http://geni.net/resources/rspec/ext/gemini/1"
     sharedvlan = "http://www.geni.net/resources/rspec/ext/shared-vlan/1"
+    sharedvlan_pg = "http://www.protogeni.net/resources/rspec/ext/shared-vlan/1"
     
     RSpecADV = "advertisement"
     RSpecRequest = "request"
@@ -187,6 +188,7 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (RSpec3Decoder.gemini, "node") : self._encode_gemini_node,
             "{%s}%s" % (RSpec3Decoder.gemini, "monitor_urn") : self._encode_gemini_monitor_urn,
             "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
+            "{%s}%s" % (RSpec3Decoder.sharedvlan_pg, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
         }
 
     def _encode_children(self, doc, out, **kwargs):
@@ -698,7 +700,7 @@ class RSpec3Decoder(UNISDecoder):
                     if sliver_id:
                         element = self._find_sliver_id(interface_id, "interface")
                     if client_id and not element:
-                        element = self._find_client_id(client_id, "interface")                
+                        element = self._find_client_id(client_id, "interface")
                 else:
                     interface_id = interface.get("component_id", None)
                     if not interface_id:
@@ -742,9 +744,14 @@ class RSpec3Decoder(UNISDecoder):
                 for interface in interface_refs:
                     interface_id = interface.get("sliver_id", None)
                     client_id = interface.get("client_id", None)
-                    if not interface_id:
+                    element = None
+                    if not interface_id and not client_id:
                         raise UNISDecoderException("Not valid Link" + etree.tostring(doc, pretty_print=True))
-                    element = self._find_sliver_id(interface_id, "interface")
+                    interface_id = interface.get("client_id", None)
+                    if sliver_id:
+                        element = self._find_sliver_id(interface_id, "interface")
+                    if client_id and not element:
+                        element = self._find_client_id(client_id, "interface")                
                     if element is None:
                         self.log.warn("ref_doesnot_exist", interface=interface,
                                       guid=self._guid)
