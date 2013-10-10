@@ -2,7 +2,7 @@
 """
 Decodes different topologies to UNIS representation.
 
-@author: Ahmed El-Hassant
+@author: Ahmed El-Hassany
 @author: fernandes
 """
 
@@ -137,15 +137,19 @@ class UNISDecoder(object, nllog.DoesLogging):
 class RSpec3Decoder(UNISDecoder):
     """Decodes RSpecV3 to UNIS format."""
     
-    rspec3 = "http://www.geni.net/resources/rspec/3"
-    gemini = "http://geni.net/resources/rspec/ext/gemini/1"
-    sharedvlan = "http://www.geni.net/resources/rspec/ext/shared-vlan/1"
-    sharedvlan_pg = "http://www.protogeni.net/resources/rspec/ext/shared-vlan/1"
-    
+    rspec3 = ["http://www.protogeni.net/resources/rspec/3",
+              "http://www.protogeni.net/resources/rspec/2",
+              "http://www.geni.net/resources/rspec/3"]
+    sharedvlan = ["http://www.protogeni.net/resources/rspec/ext/shared-vlan/1",
+                  "http://www.geni.net/resources/rspec/ext/shared-vlan/1"]
+    gemini = ["http://geni.net/resources/rspec/ext/gemini/1"]
+
+    ns_default = None
+
     RSpecADV = "advertisement"
     RSpecRequest = "request"
     RSpecManifest = "manifest"
-    
+
     def __init__(self):
         super(RSpec3Decoder, self).__init__()
         self._parent_collection = {}
@@ -168,28 +172,36 @@ class RSpec3Decoder(UNISDecoder):
         # with jsonpointers
         self._subsitution_cache = {}
 
-        self._handlers = {
-            "{%s}%s" % (RSpec3Decoder.rspec3, "rspec") : self._encode_rspec,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "node") : self._encode_rspec_node,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "location") : self._encode_rspec_location,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "hardware_type") : self._encode_rspec_hardware_type,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "interface") : self._encode_rspec_interface,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "available") : self._encode_rspec_available,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "sliver_type") : self._encode_rspec_sliver_type,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "disk_image") : self._encode_rspec_disk_image,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "relation") : self._encode_rspec_relation,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "link") : self._encode_rspec_link,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "link_type") : self._encode_rspec_link_type,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "component_manager") : self._encode_rspec_component_manager,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "interface_ref") : self._encode_rspec_interface_ref,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "property") : self._encode_rspec_property,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "host") : self._encode_rspec_host,
-            "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
-            "{%s}%s" % (RSpec3Decoder.gemini, "node") : self._encode_gemini_node,
-            "{%s}%s" % (RSpec3Decoder.gemini, "monitor_urn") : self._encode_gemini_monitor_urn,
-            "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
-            "{%s}%s" % (RSpec3Decoder.sharedvlan_pg, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
-        }
+        self._handlers = {}
+        for ns in RSpec3Decoder.rspec3:
+            self._handlers.update({
+            "{%s}%s" % (ns, "rspec") : self._encode_rspec,
+            "{%s}%s" % (ns, "node") : self._encode_rspec_node,
+            "{%s}%s" % (ns, "location") : self._encode_rspec_location,
+            "{%s}%s" % (ns, "hardware_type") : self._encode_rspec_hardware_type,
+            "{%s}%s" % (ns, "interface") : self._encode_rspec_interface,
+            "{%s}%s" % (ns, "available") : self._encode_rspec_available,
+            "{%s}%s" % (ns, "sliver_type") : self._encode_rspec_sliver_type,
+            "{%s}%s" % (ns, "disk_image") : self._encode_rspec_disk_image,
+            "{%s}%s" % (ns, "relation") : self._encode_rspec_relation,
+            "{%s}%s" % (ns, "link") : self._encode_rspec_link,
+            "{%s}%s" % (ns, "link_type") : self._encode_rspec_link_type,
+            "{%s}%s" % (ns, "component_manager") : self._encode_rspec_component_manager,
+            "{%s}%s" % (ns, "interface_ref") : self._encode_rspec_interface_ref,
+            "{%s}%s" % (ns, "property") : self._encode_rspec_property,
+            "{%s}%s" % (ns, "host") : self._encode_rspec_host,
+            "{%s}%s" % (ns, "ip") : self._encode_rspec_ip,
+            })
+        for ns in RSpec3Decoder.sharedvlan:
+            self._handlers.update({
+            "{%s}%s" % (ns, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
+            "{%s}%s" % (ns, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
+            })
+        for ns in RSpec3Decoder.gemini:
+            self._handlers.update({
+            "{%s}%s" % (ns, "node") : self._encode_gemini_node,
+            "{%s}%s" % (ns, "monitor_urn") : self._encode_gemini_monitor_urn,
+            })
 
     def _encode_children(self, doc, out, **kwargs):
         """Iterates over the all child nodes and process and call the approperiate
@@ -224,7 +236,6 @@ class RSpec3Decoder(UNISDecoder):
             exclude_prefixes +="ns%d " % x
         if exclude_ns != "":
             exclude_prefixes = 'exclude-result-prefixes="%s"\n' % exclude_prefixes 
-
 
         XSLT = """
         <xsl:stylesheet version="1.0" 
@@ -264,44 +275,22 @@ class RSpec3Decoder(UNISDecoder):
               </xsl:attribute>
            </xsl:template>
         </xsl:stylesheet>
-        """ % (exclude_ns, exclude_prefixes, RSpec3Decoder.rspec3)
+        """ % (exclude_ns, exclude_prefixes, RSpec3Decoder.ns_default)
         
         xslt_root = etree.XML(XSLT)
         transform = etree.XSLT(xslt_root)
         tree = transform(tree)
+            
         return tree
 
     def encode(self, tree, slice_urn=None, **kwargs):
         self.log.debug("encode.start", guid=self._guid)
         out = {}
         
-        # also handle ProtoGENI RSpec v2 (on which GENI RSpec v3 is based)
-        # we just overload rspec3 with rspec2 namespace
-        rspec2 = "http://www.protogeni.net/resources/rspec/2"
+        # set the default document namespace
         root = tree.getroot()
-        if root.tag in ["{%s}rspec" % rspec2]:
-            RSpec3Decoder.rspec3 = rspec2
-            self._handlers.update({
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "rspec") : self._encode_rspec,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "node") : self._encode_rspec_node,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "location") : self._encode_rspec_location,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "hardware_type") : self._encode_rspec_hardware_type,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "interface") : self._encode_rspec_interface,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "available") : self._encode_rspec_available,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "sliver_type") : self._encode_rspec_sliver_type,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "disk_image") : self._encode_rspec_disk_image,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "relation") : self._encode_rspec_relation,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "link") : self._encode_rspec_link,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "link_type") : self._encode_rspec_link_type,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "component_manager") : self._encode_rspec_component_manager,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "interface_ref") : self._encode_rspec_interface_ref,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "property") : self._encode_rspec_property,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "host") : self._encode_rspec_host,
-                    "{%s}%s" % (RSpec3Decoder.rspec3, "ip") : self._encode_rspec_ip,
-                    "{%s}%s" % (RSpec3Decoder.sharedvlan, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
-                    "{%s}%s" % (RSpec3Decoder.sharedvlan_pg, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
-                    })
-            
+        RSpec3Decoder.ns_default = root.nsmap[None]
+
         tree = self._refactor_default_xmlns(tree)
         root = tree.getroot()
         self._tree = tree
@@ -327,7 +316,7 @@ class RSpec3Decoder(UNISDecoder):
     def _encode_rspec(self, doc, out, **kwargs):
         self.log.debug("_encode_rspec.start", guid=self._guid)
         assert isinstance(out, dict)
-        assert doc.tag in ["{%s}rspec" % RSpec3Decoder.rspec3], \
+        assert doc.nsmap['rspec'] in RSpec3Decoder.rspec3, \
             "Not valid element '%s'" % doc.tag
         
         if not self._parent_collection:
@@ -417,9 +406,8 @@ class RSpec3Decoder(UNISDecoder):
         self.log.debug("_encode_rspec_node.start",
             component_id=doc.attrib.get("component_id", None), guid=self._guid)
         assert isinstance(out, dict)
-        assert doc.tag in [
-            "{%s}node" % RSpec3Decoder.rspec3
-        ], "Not valid element '%s'" % doc.tag
+        assert doc.nsmap['rspec'] in RSpec3Decoder.rspec3, \
+            "Not valid element '%s'" % doc.tag
         node = {}
         node["$schema"] = UNISDecoder.SCHEMAS["node"]
         if "nodes" not in collection:
@@ -739,7 +727,8 @@ class RSpec3Decoder(UNISDecoder):
             
             # XXX (EK): For now we just make one end point so parsing continues
             # hacked conditional above
-        elif len(link_shared_vlans):
+        # shared vlans, or in exogeni case, you get just one interface_ref *sigh*
+        elif len(link_shared_vlans) or (len(interface_refs) == 1):
             hrefs = []
             if len(interface_refs):
                 for interface in interface_refs:
@@ -765,6 +754,9 @@ class RSpec3Decoder(UNISDecoder):
                     hrefs.append("link to %s endpoint" % shared_vlan["name"])
                 else:
                     hrefs.append("unresolveable sharedvlan endpoint")
+            
+            if not link_shared_vlans:
+                hrefs.append("unresolveable sharedvlan endpoint")
 
             link["directed"] = False
             link["endpoints"] = [
@@ -1031,7 +1023,7 @@ class RSpec3Decoder(UNISDecoder):
             escaped_urn = escape_urn(urn)
             xpath = ".//rspec:%s[@sliver_id='%s' or @sliver_id='%s']" \
                 % (component_type, urn, escaped_urn)
-        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.rspec3})
+        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.ns_default})
         
         if len(result) > 1:
             self.log.debug("_find_sliver_id.end", guid=self._guid, urn=urn)
@@ -1063,7 +1055,7 @@ class RSpec3Decoder(UNISDecoder):
             escaped_urn = escape_urn(urn)
             xpath = ".//rspec:%s[@client_id='%s' or @client_id='%s']" \
                 % (component_type, urn, escaped_urn)
-        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.rspec3})
+        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.ns_default})
         if len(result) > 1:
             self.log.debug("_find_client_id.end", guid=self._guid, urn=urn)
             raise UNISDecoderException("Found more than one node with the URN '%s'" % urn)
@@ -1097,7 +1089,7 @@ class RSpec3Decoder(UNISDecoder):
             escaped_urn = escape_urn(urn)
             xpath = ".//rspec:%s[@component_id='%s' or @component_id='%s']" \
                 % (component_type, urn, escaped_urn)
-        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.rspec3})
+        result = self._root.xpath(xpath, namespaces={"rspec": RSpec3Decoder.ns_default})
         
         if len(result) > 1:
             self.log.debug("_find_component_id.end", guid=self._guid, urn=urn)
