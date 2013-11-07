@@ -1199,7 +1199,7 @@ class RSpec3Decoder(UNISDecoder):
         hardware_type = {}
         
         attrib = dict(doc.attrib)
-        # From common.rnc
+        # From common.rnc (some aggregates don't have common names)
         name = attrib.pop('name', None)
         if name:
             hardware_type['name'] = name.strip()
