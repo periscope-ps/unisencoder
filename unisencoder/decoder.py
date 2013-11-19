@@ -1199,8 +1199,10 @@ class RSpec3Decoder(UNISDecoder):
         hardware_type = {}
         
         attrib = dict(doc.attrib)
-        # From common.rnc (some aggregates don't have common names)
+        # From common.rnc
+        ## Exogeni Aggregates have an unknown node, which does not specify a hardware type 
         name = attrib.pop('name', None)
+        
         if name:
             hardware_type['name'] = name.strip()
         
