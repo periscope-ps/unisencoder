@@ -12,6 +12,7 @@ import logging
 import re
 import sys
 import uuid
+import pdb #python debugger use, pdb.set_trace(), to start trace
 from lxml import etree
 from netlogger import nllog
 from urllib import unquote
@@ -181,6 +182,7 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "hardware_type") : self._encode_rspec_hardware_type,
             "{%s}%s" % (ns, "interface") : self._encode_rspec_interface,
             "{%s}%s" % (ns, "available") : self._encode_rspec_available,
+            "{%s}%s" % (ns, "cloud") : self._encode_rspec_cloud,           ### new tag, cloud
             "{%s}%s" % (ns, "sliver_type") : self._encode_rspec_sliver_type,
             "{%s}%s" % (ns, "disk_image") : self._encode_rspec_disk_image,
             "{%s}%s" % (ns, "relation") : self._encode_rspec_relation,
@@ -215,6 +217,7 @@ class RSpec3Decoder(UNISDecoder):
             if child.tag in self._handlers:
                 self._handlers[child.tag](child, out, **kwargs)
             else:
+                #pdb.set_trace()
                 sys.stderr.write("No handler for: %s\n" % child.tag)
                 self.log.error("no handler for '%s'" % child.tag,
                     child=child.tag , guid=self._guid)
@@ -301,6 +304,7 @@ class RSpec3Decoder(UNISDecoder):
             self._handlers[root.tag](root, out, collection=out,
                 parent=out, slice_urn=slice_urn, **kwargs)
         else:
+            #pdb.set_trace()
             sys.stderr.write("No handler for: %s\n" % root.tag)
         
         sout = json.dumps(out)
@@ -920,6 +924,40 @@ class RSpec3Decoder(UNISDecoder):
             parent=parent, **kwargs)
         self.log.debug("_encode_rspec_available.end", guid=self._guid)
         return {"available": available}
+
+    ### working function for new rspec tag, cloud
+    def _encode_rspec_cloud(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_rspec_cloud.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["node"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+        if "cloud" not in geni_props:
+            geni_props["cloud"] = {}
+        cloud = geni_props["cloud"]
+        attrib = dict(doc.attrib)
+        # From ad.rnc
+        #now = attrib.pop('now', None)
+        
+        #if now is not None:
+        #    available["now"] = self._parse_xml_bool(now)
+        #    if available["now"]:
+        #        parent["status"] = "AVAILABLE"
+        if len(attrib) > 0:
+            self.log.warn("unparesd_attributes",
+                attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self._encode_children(doc, cloud, collection=collection,
+            parent=parent, **kwargs)
+        self.log.debug("_encode_rspec_cloud.end", guid=self._guid)
+        return {"cloud": cloud}
     
     def _make_self_link(self, element, rspec_type=None, use_client_id=False):
         if element is None:
@@ -1734,6 +1772,7 @@ class PSDecoder(UNISDecoder):
         if root.tag in self._handlers:
             self._handlers[root.tag](root, out, **kwargs)
         else:
+            #pdb.set_trace()
             sys.stderr.write("No handler for: %s\n" % root.tag)
         self.log.debug("encode.end", guid=self._guid)
         sout = json.dumps(out)
@@ -2435,6 +2474,7 @@ class PSDecoder(UNISDecoder):
             if child.tag in self._handlers:
                 self._handlers[child.tag](child, out, **kwargs)
             else:
+                #pdb.set_trace()
                 sys.stderr.write("No handler for: %s\n" % child.tag)
                 self.log.error("no handler for '%s'" % child.tag, child=child.tag , guid=self._guid)
             self.log.debug("_encode_children.end", child=child.tag, guid=self._guid)                
