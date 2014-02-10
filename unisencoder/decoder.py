@@ -12,7 +12,7 @@ import logging
 import re
 import sys
 import uuid
-import pdb #python debugger use, pdb.set_trace(), to start trace
+import pdb #python debugger: use, pdb.set_trace(), to start trace
 from lxml import etree
 from netlogger import nllog
 from urllib import unquote
@@ -197,7 +197,8 @@ class RSpec3Decoder(UNISDecoder):
         for ns in RSpec3Decoder.sharedvlan:
             self._handlers.update({
             "{%s}%s" % (ns, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
-            "{%s}%s" % (ns, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan,
+            "{%s}%s" % (ns, "link_shared_vlan") : self._encode_sharedvlan_link_shared_vlan, # why is there two of these??
+            "{%s}%s" % (ns, "rspec_shared_vlan") : self._encode_sharedvlan_rspec_shared_vlan,  ### new tag, rspec_shared_vlan
             })
         for ns in RSpec3Decoder.gemini:
             self._handlers.update({
@@ -217,7 +218,6 @@ class RSpec3Decoder(UNISDecoder):
             if child.tag in self._handlers:
                 self._handlers[child.tag](child, out, **kwargs)
             else:
-                #pdb.set_trace()
                 sys.stderr.write("No handler for: %s\n" % child.tag)
                 self.log.error("no handler for '%s'" % child.tag,
                     child=child.tag , guid=self._guid)
@@ -304,7 +304,6 @@ class RSpec3Decoder(UNISDecoder):
             self._handlers[root.tag](root, out, collection=out,
                 parent=out, slice_urn=slice_urn, **kwargs)
         else:
-            #pdb.set_trace()
             sys.stderr.write("No handler for: %s\n" % root.tag)
         
         sout = json.dumps(out)
@@ -424,6 +423,7 @@ class RSpec3Decoder(UNISDecoder):
             node["properties"][self.geni_ns] = {}
         geni_props = node["properties"][self.geni_ns]
         attrib = dict(doc.attrib)
+
         # From common.rnc
         # From ad.rnc & request.rnc
         component_id = attrib.pop('component_id', None)
@@ -1486,6 +1486,39 @@ class RSpec3Decoder(UNISDecoder):
         shared_vlans.append(shared_vlan)
         return {"link_shared_vlans": shared_vlans}
 
+    def _encode_sharedvlan_rspec_shared_vlan(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_sharedvlan_rspec_shared_vlan.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+
+        if "rspec_shared_vlans" not in geni_props:
+            geni_props["rspec_shared_vlans"] = []
+        shared_vlans = geni_props["rspec_shared_vlans"]
+        shared_vlan = {}
+        
+        attrib = dict(doc.attrib)
+
+        name = attrib.pop('name', None)
+        #vlantag = attrib.pop('vlantag', None)
+
+        if name:
+            shared_vlan['name'] = name
+        #if vlantag:
+        #    shared_vlan['vlantag'] = vlantag
+
+        
+        self._encode_children(doc, shared_vlan, collection=collection, parent=parent, **kwargs)
+        shared_vlans.append(shared_vlan)
+        return {"rspec_shared_vlans": shared_vlans}
+
     def _encode_rspec_property(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_rspec_property.start", guid=self._guid)
         assert isinstance(out, dict)
@@ -1772,7 +1805,6 @@ class PSDecoder(UNISDecoder):
         if root.tag in self._handlers:
             self._handlers[root.tag](root, out, **kwargs)
         else:
-            #pdb.set_trace()
             sys.stderr.write("No handler for: %s\n" % root.tag)
         self.log.debug("encode.end", guid=self._guid)
         sout = json.dumps(out)
@@ -2474,7 +2506,6 @@ class PSDecoder(UNISDecoder):
             if child.tag in self._handlers:
                 self._handlers[child.tag](child, out, **kwargs)
             else:
-                #pdb.set_trace()
                 sys.stderr.write("No handler for: %s\n" % child.tag)
                 self.log.error("no handler for '%s'" % child.tag, child=child.tag , guid=self._guid)
             self.log.debug("_encode_children.end", child=child.tag, guid=self._guid)                
