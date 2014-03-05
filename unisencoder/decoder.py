@@ -193,6 +193,8 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "property") : self._encode_rspec_property,
             "{%s}%s" % (ns, "host") : self._encode_rspec_host,
             "{%s}%s" % (ns, "ip") : self._encode_rspec_ip,
+            "{%s}%s" % (ns, "services") : self._encode_rspec_services,
+            "{%s}%s" % (ns, "login") : self._encode_rspec_login,
             })
         for ns in RSpec3Decoder.sharedvlan:
             self._handlers.update({
@@ -1271,6 +1273,8 @@ class RSpec3Decoder(UNISDecoder):
             "name", "os", "version", "description",
             # From ad.rnc
             "default",
+            # somehow url is also allowed now
+            "url",
         ]
         disk_image = dict(
             [
@@ -1612,7 +1616,68 @@ class RSpec3Decoder(UNISDecoder):
         self._encode_children(doc, ip, collection=collection, parent=parent, **kwargs)
         self.log.debug("_encode_rspec_ip.end", guid=self._guid)
         return {'ip': ip}
+
+    def _encode_rspec_services(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_rspec_services.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) in [UNISDecoder.SCHEMAS["node"], UNISDecoder.SCHEMAS["port"]], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        
+        service = {}
+        attrib = dict(doc.attrib)
+        if len(attrib) != 0:
+            self.log.warn("unparesd_attributes", attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self._encode_children(doc, service, collection=collection, parent=parent, **kwargs)
+        self.log.debug("_encode_rspec_services.end", guid=self._guid)
+        return service
     
+    def _encode_rspec_login(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_rspec_login.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) in [UNISDecoder.SCHEMAS["node"], UNISDecoder.SCHEMAS["port"]], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+        
+        if "logins" not in geni_props:
+            geni_props["logins"] = []
+        logins = geni_props["logins"]
+        
+        login = {}
+        attrib = dict(doc.attrib)
+        
+        # From common.rnc
+        auth = attrib.pop('authentication', None)
+        hostname = attrib.pop('hostname', None)
+        port = attrib.pop('port', None)
+        username = attrib.pop('username', None)
+        if auth:
+            login['authentication'] = auth.strip()
+        if hostname:
+            login['hostname'] = hostname.strip()
+        if port:
+            login['port'] = port.strip()
+        if username:
+            login['username'] = username.strip()
+
+        if len(attrib) != 0:
+            self.log.warn("unparesd_attributes", attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self._encode_children(doc, login, collection=collection, parent=parent, **kwargs)
+        logins.append(login)
+        self.log.debug("_encode_rspec_login.end", guid=self._guid)
+        return {"logins": logins}
+
     def _encode_gemini_node(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_gemini_node.start", guid=self._guid)
         assert isinstance(out, dict)
