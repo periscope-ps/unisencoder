@@ -144,7 +144,7 @@ class RSpec3Decoder(UNISDecoder):
     sharedvlan = ["http://www.protogeni.net/resources/rspec/ext/shared-vlan/1",
                   "http://www.geni.net/resources/rspec/ext/shared-vlan/1"]
     gemini = ["http://geni.net/resources/rspec/ext/gemini/1"]
-
+    foam = ["http://www.geni.net/resources/rspec/ext/openflow/3"]
     ns_default = None
 
     RSpecADV = "advertisement"
@@ -206,6 +206,13 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "node") : self._encode_gemini_node,
             "{%s}%s" % (ns, "monitor_urn") : self._encode_gemini_monitor_urn,
             })
+        for ns in RSpec3Decoder.foam:
+            self._handlers.update({
+            "{%s}%s" % (ns, "datapath") : self._encode_foam_datapath,
+            "{%s}%s" % (ns, "port") : self._encode_foam_port,
+            "{%s}%s" % (ns, "location") : self._encode_foam_location,
+            })
+
 
     def _encode_children(self, doc, out, **kwargs):
         """Iterates over the all child nodes and process and call the approperiate
@@ -960,7 +967,7 @@ class RSpec3Decoder(UNISDecoder):
             parent=parent, **kwargs)
         self.log.debug("_encode_rspec_cloud.end", guid=self._guid)
         return {"cloud": cloud}
-    
+
     def _make_self_link(self, element, rspec_type=None, use_client_id=False):
         if element is None:
             raise UNISDecoderException("Cannot make self link to NONE")
@@ -1677,6 +1684,127 @@ class RSpec3Decoder(UNISDecoder):
         logins.append(login)
         self.log.debug("_encode_rspec_login.end", guid=self._guid)
         return {"logins": logins}
+
+    def foam_urn_to_nodeid(self, urn):
+        return urn[urn.rfind('foam'):].translate(None, ':').replace('+', '_')
+
+    def foam_urn_to_portid(self, urn, name, num):
+        return urn[urn.rfind('foam'):].translate(None, ':').replace('+', '_')+'_'+name+'_'+num
+
+    ### function for new foam tag, location 
+    def _encode_foam_datapath(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_foam_datapath.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        node = {}
+        node["$schema"] = UNISDecoder.SCHEMAS["node"]
+        node['status'] = "AVAILABLE"
+        if "nodes" not in collection:
+            collection["nodes"] = []
+        if "properties" not in node:
+            node["properties"] = {}
+        if self.geni_ns not in node["properties"]:
+            node["properties"][self.geni_ns] = {}
+
+        geni_props = node["properties"][self.geni_ns]
+
+        attrib = dict(doc.attrib)
+        dpid = attrib.pop('dpid', None)
+        component_id = attrib.pop('component_id', None)
+        component_manager_id = attrib.pop('component_manager_id', None)
+        if dpid is not None:
+            node['dpid'] = dpid.translate(None, ':') 
+        if component_id is not None:
+            geni_props['component_id'] = unquote(component_id.strip())
+        if component_manager_id is not None:
+            geni_props['component_manager_id'] = component_manager_id.strip()
+
+        # Set URN, ID, and name
+        rspec_type = kwargs.get("rspec_type", None)
+        if rspec_type == RSpec3Decoder.RSpecADV:
+            node["id"] = self.foam_urn_to_nodeid(geni_props['component_id'])
+            node["urn"] = geni_props['component_id']
+
+        if len(attrib) > 0:
+            self.log.warn("unparesd_attributes",
+                attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        print "KKKKK", node 
+        self._encode_children(doc, node, collection=collection,
+            parent=parent, **kwargs)
+
+        collection["nodes"].append(node)
+        self.log.debug("_encode_rspec_foam.end", guid=self._guid)
+        return {"node": node}
+
+    ### function for new foam tag, location 
+    def _encode_foam_location(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_foam_location.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        if "location" not in out:
+            out["location"] = {}
+        location = out["location"]
+        xml_attribs = dict(doc.attrib)
+        schema_attribs = [
+            # From common.rnc
+            "country", "longitude", "latitude"
+        ]
+        location.update(dict(
+                [
+                    (name, xml_attribs.pop(name).strip()) \
+                    for name in xml_attribs.keys() \
+                    if name in schema_attribs
+                ]
+            )
+        )
+        # Convert values
+        if location['longitude'] is not None:
+            location['longitude'] = float(location['longitude'])
+        if location['latitude'] is not None:
+            location['latitude'] = float(location['latitude'])
+        
+        if len(xml_attribs) != 0:
+            self.log.warn("unparesd_attributes",
+                attribs=xml_attribs, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % xml_attribs)
+        
+        self._encode_children(doc, location, collection=collection,
+            parent=parent, **kwargs)
+        self.log.debug("_encode_rspec_location.end", guid=self._guid)
+        return {"location": location}
+
+    ### function for new foam tag, port 
+    def _encode_foam_port(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_foam_port.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+
+        port = {}
+        port["$schema"] = UNISDecoder.SCHEMAS["port"]
+        if "ports" not in collection:
+            collection["ports"] = []
+        if "properties" not in port:
+            port["properties"] = {}
+
+        attrib = dict(doc.attrib)
+        num = attrib.pop('num', None)
+        name = attrib.pop('name', None)
+
+        if num is not None:
+            port['properties']['num'] = num 
+        if name is not None:
+            port['properties']['name'] = name
+
+        port['id'] = self.foam_urn_to_portid(out['urn'], name, num)
+        self._encode_children(doc, port, collection=collection,
+            parent=parent, **kwargs)
+
+        collection["ports"].append(port)
+        self.log.debug("_encode_foam_port.end", guid=self._guid)
+        return {"port": port}
 
     def _encode_gemini_node(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_gemini_node.start", guid=self._guid)
@@ -2668,6 +2796,7 @@ def main():
         out_file = open(args.output, 'w')
     
     json.dump(topology_out, fp=out_file, indent=args.indent)
+    print json.dump(topology_out, fp=sys.stdout, indent=args.indent)
     out_file.close()
     
 if __name__ == '__main__':
