@@ -146,6 +146,8 @@ class RSpec3Decoder(UNISDecoder):
     gemini = ["http://geni.net/resources/rspec/ext/gemini/1"]
     foam = ["http://www.geni.net/resources/rspec/ext/openflow/3"]
     topo = ["http://geni.bssoftworks.com/rspec/ext/topo/1"]
+    opstate = ["http://www.geni.net/resources/rspec/ext/opstate/1"]
+
     ns_default = None
 
     RSpecADV = "advertisement"
@@ -196,6 +198,7 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "ip") : self._encode_rspec_ip,
             "{%s}%s" % (ns, "services") : self._encode_rspec_services,
             "{%s}%s" % (ns, "login") : self._encode_rspec_login,
+            "{%s}%s" % (ns, "external_ref") : self._encode_rspec_external_ref,
             })
         for ns in RSpec3Decoder.sharedvlan:
             self._handlers.update({
@@ -219,6 +222,10 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "geni-host") : self._encode_foam_topo,
             "{%s}%s" % (ns, "other") : self._encode_foam_topo,
             "{%s}%s" % (ns, "pg-host") : self._encode_foam_topo,
+            })
+        for ns in RSpec3Decoder.opstate:
+            self._handlers.update({
+            "{%s}%s" % (ns, "rspec_opstate") : self._encode_rspec_opstate,
             })
 
     def _encode_children(self, doc, out, **kwargs):
@@ -1743,7 +1750,7 @@ class RSpec3Decoder(UNISDecoder):
 
         collection["nodes"].append(node)
         self.log.debug("_encode_rspec_foam.end", guid=self._guid)
-        return {"node": node}
+        return node
 
     ### function for new foam tag, location 
     def _encode_foam_location(self, doc, out, collection, parent, **kwargs):
@@ -1794,6 +1801,7 @@ class RSpec3Decoder(UNISDecoder):
         comp_id = attrib.pop('remote-component-id', None)
         port_name = attrib.pop('remote-port-name', None)
         desc = attrib.pop('desc', None)
+        remote_hostname = attrib.pop('remote-hostname', None)
 
         if desc is not None:
             topo['desc'] = desc 
@@ -1805,10 +1813,18 @@ class RSpec3Decoder(UNISDecoder):
             topo['remote-component-id'] = comp_id 
         if port_name is not None:
             topo['remote-port-name'] = port_name 
+        if remote_hostname is not None:
+            topo['remote-hostname'] = remote_hostname
 
         out['properties']['topo']= topo
         self._encode_children(doc, topo, collection=collection,
             parent=parent, **kwargs)
+
+        if len(attrib) > 0:
+            self.log.warn("unparesd_attributes",
+                attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+
         self.log.debug("_encode_foam_topo.end", guid=self._guid)
         return {'topo': topo}
 
@@ -1838,9 +1854,69 @@ class RSpec3Decoder(UNISDecoder):
         self._encode_children(doc, port, collection=collection,
             parent=parent, **kwargs)
 
+        if len(attrib) > 0:
+            self.log.warn("unparesd_attributes",
+                attribs=attrib, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+
         collection["ports"].append(port)
         self.log.debug("_encode_foam_port.end", guid=self._guid)
-        return {"port": port}
+        return port
+
+    #An empty handler for opstate to remove errors, we do not have
+    #useful info for UNIS from this tag as of now.
+    def _encode_rspec_opstate(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_rspec_opstate.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        self.log.debug("_encode_rspec_opstate.end", guid=self._guid)
+        return
+
+    #A scaled down node handler for external ref (elements of an external AM)
+    def _encode_rspec_external_ref(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_rspec_external_ref.start",
+            component_id=doc.attrib.get("component_id", None), guid=self._guid)
+        assert isinstance(out, dict)
+        assert doc.nsmap['rspec'] in RSpec3Decoder.rspec3, \
+            "Not valid element '%s'" % doc.tag
+        node = {}
+        node['status'] = "EXTERNAL"
+        node["$schema"] = UNISDecoder.SCHEMAS["node"]
+        if "nodes" not in collection:
+            collection["nodes"] = []
+        
+        # Parse GENI specific properties
+        if "properties" not in node:
+            node["properties"] = {}
+        if self.geni_ns not in node["properties"]:
+            node["properties"][self.geni_ns] = {}
+        geni_props = node["properties"][self.geni_ns]
+        attrib = dict(doc.attrib)
+        # From common.rnc
+        # From ad.rnc & request.rnc
+        component_id = attrib.pop('component_id', None)
+        component_manager_id = attrib.pop('component_manager_id', None)
+        
+        if component_id is not None:
+            geni_props['component_id'] = unquote(component_id.strip())
+        if component_manager_id is not None:
+            geni_props['component_manager_id'] = component_manager_id.strip()
+
+        kwargs.pop("parent", None)
+        self._encode_children(doc, node, collection=collection,
+            parent=node, **kwargs)
+        
+        collection["nodes"].append(node)
+
+        if len(attrib) > 0:
+            print "GG UNPARSED"
+            self.log.warn("unparesd_attributes", attribs=attrib,
+                guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        
+        self.log.debug("_encode_rspec_external_ref.end",
+            component_id=doc.attrib.get("component_id", None), guid=self._guid)
+        return node 
 
     def _encode_gemini_node(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_gemini_node.start", guid=self._guid)
