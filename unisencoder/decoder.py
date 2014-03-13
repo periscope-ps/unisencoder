@@ -218,6 +218,7 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "geni-of") : self._encode_foam_topo,
             "{%s}%s" % (ns, "geni-host") : self._encode_foam_topo,
             "{%s}%s" % (ns, "other") : self._encode_foam_topo,
+            "{%s}%s" % (ns, "pg-host") : self._encode_foam_topo,
             })
 
     def _encode_children(self, doc, out, **kwargs):
