@@ -145,6 +145,7 @@ class RSpec3Decoder(UNISDecoder):
                   "http://www.geni.net/resources/rspec/ext/shared-vlan/1"]
     gemini = ["http://geni.net/resources/rspec/ext/gemini/1"]
     foam = ["http://www.geni.net/resources/rspec/ext/openflow/3"]
+    topo = ["http://geni.bssoftworks.com/rspec/ext/topo/1"]
     ns_default = None
 
     RSpecADV = "advertisement"
@@ -212,7 +213,12 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "port") : self._encode_foam_port,
             "{%s}%s" % (ns, "location") : self._encode_foam_location,
             })
-
+        for ns in RSpec3Decoder.topo:
+            self._handlers.update({
+            "{%s}%s" % (ns, "geni-of") : self._encode_foam_topo,
+            "{%s}%s" % (ns, "geni-host") : self._encode_foam_topo,
+            "{%s}%s" % (ns, "other") : self._encode_foam_topo,
+            })
 
     def _encode_children(self, doc, out, **kwargs):
         """Iterates over the all child nodes and process and call the approperiate
@@ -1731,7 +1737,6 @@ class RSpec3Decoder(UNISDecoder):
             self.log.warn("unparesd_attributes",
                 attribs=attrib, guid=self._guid)
             sys.stderr.write("Unparsed attributes: %s\n" % attrib)
-        print "KKKKK", node 
         self._encode_children(doc, node, collection=collection,
             parent=parent, **kwargs)
 
@@ -1775,6 +1780,36 @@ class RSpec3Decoder(UNISDecoder):
             parent=parent, **kwargs)
         self.log.debug("_encode_rspec_location.end", guid=self._guid)
         return {"location": location}
+
+    ### function for new foam tag, topo 
+    def _encode_foam_topo(self, doc, out, collection, parent, **kwargs):
+        print "In foam TOPO"
+        self.log.debug("_encode_foam_topo.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        
+        topo = {}
+        attrib = dict(doc.attrib)
+        comp_id = attrib.pop('remote-component-id', None)
+        port_name = attrib.pop('remote-port-name', None)
+        desc = attrib.pop('desc', None)
+
+        if desc is not None:
+            topo['desc'] = desc 
+        if doc.tag is not None:
+            tag = doc.tag
+            topo['type'] = tag[tag.rfind('}')+1:]
+
+        if comp_id is not None:
+            topo['remote-component-id'] = comp_id 
+        if port_name is not None:
+            topo['remote-port-name'] = port_name 
+
+        out['properties']['topo']= topo
+        self._encode_children(doc, topo, collection=collection,
+            parent=parent, **kwargs)
+        self.log.debug("_encode_foam_topo.end", guid=self._guid)
+        return {'topo': topo}
 
     ### function for new foam tag, port 
     def _encode_foam_port(self, doc, out, collection, parent, **kwargs):
