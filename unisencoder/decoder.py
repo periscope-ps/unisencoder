@@ -30,15 +30,15 @@ class UNISDecoder(object, nllog.DoesLogging):
     """Abstract class for UNIS decoders."""
     
     SCHEMAS = {
-        'networkresource': 'http://unis.incntre.iu.edu/schema/20140214/networkresource#',
-        'node': 'http://unis.incntre.iu.edu/schema/20140214/node#',
-        'domain': 'http://unis.incntre.iu.edu/schema/20140214/domain#',
-        'topology': 'http://unis.incntre.iu.edu/schema/20140214/topology#',
-        'port': 'http://unis.incntre.iu.edu/schema/20140214/port#',
-        'link': 'http://unis.incntre.iu.edu/schema/20140214/link#',
-        'network': 'http://unis.incntre.iu.edu/schema/20140214/network#',
-        'blipp': 'http://unis.incntre.iu.edu/schema/20140214/blipp#',
-        'metadata': 'http://unis.incntre.iu.edu/schema/20140214/metadata#',
+        'networkresource': 'http://unis.incntre.iu.edu/schema/20120709/networkresource#',
+        'node': 'http://unis.incntre.iu.edu/schema/20120709/node#',
+        'domain': 'http://unis.incntre.iu.edu/schema/20120709/domain#',
+        'topology': 'http://unis.incntre.iu.edu/schema/20120709/topology#',
+        'port': 'http://unis.incntre.iu.edu/schema/20120709/port#',
+        'link': 'http://unis.incntre.iu.edu/schema/20120709/link#',
+        'network': 'http://unis.incntre.iu.edu/schema/20120709/network#',
+        'blipp': 'http://unis.incntre.iu.edu/schema/20120709/blipp#',
+        'metadata': 'http://unis.incntre.iu.edu/schema/20120709/metadata#',
     }
     
     def __init__(self):
@@ -144,7 +144,7 @@ class RSpec3Decoder(UNISDecoder):
     sharedvlan = ["http://www.protogeni.net/resources/rspec/ext/shared-vlan/1",
                   "http://www.geni.net/resources/rspec/ext/shared-vlan/1"]
     gemini = ["http://geni.net/resources/rspec/ext/gemini/1"]
-    foam = ["http://www.geni.net/resources/rspec/ext/openflow/3"]
+    openflow = ["http://www.geni.net/resources/rspec/ext/openflow/3"]
     topo = ["http://geni.bssoftworks.com/rspec/ext/topo/1"]
     opstate = ["http://www.geni.net/resources/rspec/ext/opstate/1"]
 
@@ -210,11 +210,15 @@ class RSpec3Decoder(UNISDecoder):
             "{%s}%s" % (ns, "node") : self._encode_gemini_node,
             "{%s}%s" % (ns, "monitor_urn") : self._encode_gemini_monitor_urn,
             })
-        for ns in RSpec3Decoder.foam:
+        for ns in RSpec3Decoder.openflow:
             self._handlers.update({
             "{%s}%s" % (ns, "datapath") : self._encode_foam_datapath,
             "{%s}%s" % (ns, "port") : self._encode_foam_port,
             "{%s}%s" % (ns, "location") : self._encode_foam_location,
+            "{%s}%s" % (ns, "sliver") : self._encode_foam_sliver,
+            "{%s}%s" % (ns, "controller") : self._encode_foam_controller,
+            "{%s}%s" % (ns, "group") : self._encode_foam_group,
+            "{%s}%s" % (ns, "match") : self._encode_foam_match,
             })
         for ns in RSpec3Decoder.topo:
             self._handlers.update({
@@ -1698,7 +1702,8 @@ class RSpec3Decoder(UNISDecoder):
         logins.append(login)
         self.log.debug("_encode_rspec_login.end", guid=self._guid)
         return {"logins": logins}
-
+    
+    ##TODO : check if lambda can be used.
     def foam_urn_to_nodeid(self, urn):
         return urn[urn.rfind('foam'):].translate(None, ':').replace('+', '_')
 
@@ -1737,14 +1742,17 @@ class RSpec3Decoder(UNISDecoder):
 
         # Set URN, ID, and name
         rspec_type = kwargs.get("rspec_type", None)
-        if rspec_type == RSpec3Decoder.RSpecADV:
-            node["id"] = self.foam_urn_to_nodeid(geni_props['component_id'])
-            node["urn"] = geni_props['component_id']
+
+        #TODO Findout the reason for this check
+        #if rspec_type == RSpec3Decoder.RSpecADV:
+        node["id"] = self.foam_urn_to_nodeid(geni_props['component_id'])
+        node["urn"] = geni_props['component_id']
 
         if len(attrib) > 0:
             self.log.warn("unparesd_attributes",
                 attribs=attrib, guid=self._guid)
             sys.stderr.write("Unparsed attributes: %s\n" % attrib)
+        #pdb.set_trace()
         self._encode_children(doc, node, collection=collection,
             parent=parent, **kwargs)
 
@@ -1789,9 +1797,83 @@ class RSpec3Decoder(UNISDecoder):
         self.log.debug("_encode_rspec_location.end", guid=self._guid)
         return {"location": location}
 
+    ### function for new openflow tag, sliver 
+    def _encode_foam_sliver(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_foam_sliver.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+
+        rspec_type = kwargs.get("rspec_type", None)
+        #TODO check for rspec type
+        attribs = dict(doc.attrib)
+
+        ref = attribs.pop('ref')
+        desc = attribs.pop('description')
+        email = attribs.pop('email')
+        
+        if ref is not None:
+            out['properties']['ref'] = ref 
+        if desc is not None:
+            out['properties']['description'] = desc 
+        if email is not None:
+            out['properties']['email'] = ref 
+
+        #pdb.set_trace()
+        
+        if len(attribs) != 0:
+            self.log.warn("unparesd_attributes",
+                attribs=xml_attribs, guid=self._guid)
+            sys.stderr.write("Unparsed attributes: %s\n" % xml_attribs)
+        
+        self._encode_children(doc, out, collection=collection,
+            parent=parent, **kwargs)
+        self.log.debug("_encode_rspec_sliver.end", guid=self._guid)
+        return 
+
+    ### function for new openflow tag,controller 
+    def _encode_foam_controller(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_controller_.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+
+        attribs = dict(doc.attrib)
+
+        url = attribs.pop('url')
+        pri = attribs.pop('type')
+        
+        if url is not None and pri is not None:
+            key = 'controller' + '_' + pri
+            out['properties'][key] = url
+
+        self._encode_children(doc, out, collection=collection,
+            parent=parent, **kwargs)
+
+        self.log.debug("_encode_controller_.end", guid=self._guid)
+        return 
+
+    ### function for new openflow tag, group
+    def _encode_foam_group(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_foam_group.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        
+        #schema doesn't have enry for groups, needs to be taken care of
+        self._encode_children(doc, out, collection=collection,
+            parent=parent, **kwargs)
+
+        self.log.debug("_encode_foam_group.end", guid=self._guid)
+        return 
+
+    #Stub for packet match, should be extended.
+    def _encode_foam_match(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_foam_match.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        self.log.debug("_encode_foam_match.end", guid=self._guid)
+        return 
+
     ### function for new foam tag, topo 
     def _encode_foam_topo(self, doc, out, collection, parent, **kwargs):
-        print "In foam TOPO"
         self.log.debug("_encode_foam_topo.start", guid=self._guid)
         assert isinstance(out, dict)
         assert isinstance(parent, dict)
@@ -2908,7 +2990,7 @@ def main():
         out_file = open(args.output, 'w')
     
     json.dump(topology_out, fp=out_file, indent=args.indent)
-    print json.dump(topology_out, fp=sys.stdout, indent=args.indent)
+    #print json.dump(topology_out, fp=sys.stdout, indent=args.indent)
     out_file.close()
     
 if __name__ == '__main__':
