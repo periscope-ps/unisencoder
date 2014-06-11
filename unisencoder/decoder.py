@@ -144,6 +144,7 @@ class RSpec3Decoder(UNISDecoder):
     sharedvlan = ["http://www.protogeni.net/resources/rspec/ext/shared-vlan/1",
                   "http://www.geni.net/resources/rspec/ext/shared-vlan/1"]
     gemini = ["http://geni.net/resources/rspec/ext/gemini/1"]
+    stitch = ["http://hpn.east.isi.edu/rspec/ext/stitch/0.1/"]
 
     ns_default = None
 
@@ -163,7 +164,7 @@ class RSpec3Decoder(UNISDecoder):
         self._sliver_id_cache = {}
         self.geni_ns = "geni"
         self._ignored_namespaces = [
-            "http://hpn.east.isi.edu/rspec/ext/stitch/0.1/",
+            #"http://hpn.east.isi.edu/rspec/ext/stitch/0.1/",
             "http://www.protogeni.net/resources/rspec/ext/emulab/1",
             "http://www.protogeni.net/resources/rspec/ext/flack/1",
             "http://www.protogeni.net/resources/rspec/ext/client/1",
@@ -205,6 +206,14 @@ class RSpec3Decoder(UNISDecoder):
             self._handlers.update({
             "{%s}%s" % (ns, "node") : self._encode_gemini_node,
             "{%s}%s" % (ns, "monitor_urn") : self._encode_gemini_monitor_urn,
+            })
+        for ns in RSpec3Decoder.stitch:
+            self._handlers.update({
+            "{%s}%s" % (ns, "stitching") : self._encode_stitching,
+            "{%s}%s" % (ns, "path") : self._encode_stitch_path,
+            "{%s}%s" % (ns, "hop") : self._encode_stitch_hop,
+            "{%s}%s" % (ns, "link") : self._encode_stitch_link,
+            "{%s}%s" % (ns, "nextHop") : self._encode_stitch_nexthop,
             })
 
     def _encode_children(self, doc, out, **kwargs):
@@ -1489,6 +1498,69 @@ class RSpec3Decoder(UNISDecoder):
         self._encode_children(doc, shared_vlan, collection=collection, parent=parent, **kwargs)
         shared_vlans.append(shared_vlan)
         return {"link_shared_vlans": shared_vlans}
+
+    def _encode_stitching(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_stitching.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        # Parse GENI specific properties
+        if "properties" not in parent:
+            parent["properties"] = {}
+        if self.geni_ns not in parent["properties"]:
+            parent["properties"][self.geni_ns] = {}
+        geni_props = parent["properties"][self.geni_ns]
+
+        stitch_hops = {}
+        self._encode_children(doc, stitch_hops, collection=collection, parent=parent, **kwargs)
+
+    def _encode_stitch_path(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_stitch_path.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        if "paths" not in collection:
+            collection['paths'] = []
+        stitch_path = {}
+        stitch_hops = []
+        attrib = dict(doc.attrib)
+        link_name = attrib['id']
+        src_endpoint = ''
+        dst_endpoint = ''
+        for link in parent['links']:
+            if link_name == link['name']:
+                src_endpoint = link['properties']['geni']['interface_refs'][0]['component_id']
+                dst_endpoint = link['properties']['geni']['interface_refs'][1]['component_id']
+        stitch_path['id'] = src_endpoint + '%' + dst_endpoint 
+        stitch_hops.append({'id':src_endpoint})
+
+        self._encode_children(doc, stitch_hops, collection=collection, parent=parent, **kwargs)
+        stitch_path['hops'] = stitch_hops
+        stitch_hops.append({'id':dst_endpoint})
+        collection['paths'].append(stitch_path)
+
+    def _encode_stitch_hop(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_stitch_path.start", guid=self._guid)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        stitch_hop = {}
+        self._encode_children(doc, stitch_hop, collection=collection, parent=parent, **kwargs)
+        out.append(stitch_hop)
+
+    def _encode_stitch_link(self, doc, out, collection, parent, **kwargs):
+        self.log.debug("_encode_stitch_path.start", guid=self._guid)
+        assert isinstance(out, dict)
+        assert isinstance(parent, dict)
+        assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
+            "Found parent '%s'." % (parent.get("$schema", None))
+        attrib = dict(doc.attrib)
+        out['id'] = attrib['id']
+
+    def _encode_stitch_nexthop(self, doc, out, collection, parent, **kwargs):
+        pass
 
     def _encode_rspec_property(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_rspec_property.start", guid=self._guid)
