@@ -317,7 +317,13 @@ class RSpec3Decoder(UNISDecoder):
         else:
             #pdb.set_trace()
             sys.stderr.write("No handler for: %s\n" % root.tag)
-        
+        try:
+            paths = out.pop('paths', None) 
+            spath = json.dumps(paths)
+            path_out = json.loads(spath)
+        except KeyError:
+            pass
+
         sout = json.dumps(out)
         # This is an optimization hack to make every jsonpath a jsonpointer
         for urn, jpath in self._subsitution_cache.iteritems():
@@ -326,7 +332,7 @@ class RSpec3Decoder(UNISDecoder):
         out = json.loads(sout)
         
         self.log.debug("encode.end", guid=self._guid)
-        return out
+        return out, path_out
     
     def _encode_rspec(self, doc, out, **kwargs):
         self.log.debug("_encode_rspec.start", guid=self._guid)
@@ -1534,12 +1540,12 @@ class RSpec3Decoder(UNISDecoder):
                 src_endpoint = link['properties']['geni']['interface_refs'][0]['component_id']
                 dst_endpoint = link['properties']['geni']['interface_refs'][1]['component_id']
         stitch_path['id'] = src_endpoint + '%' + dst_endpoint 
-        stitch_hops.append({'id':src_endpoint})
+        stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % src_endpoint, 'rel':"full"})
 
         self._encode_children(doc, stitch_hops, collection=collection, parent=parent, **kwargs)
         stitch_path['hops'] = stitch_hops
-        stitch_hops.append({'id':dst_endpoint})
-        collection['paths'].append(stitch_path)
+        stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % dst_endpoint, 'rel':"full"})
+        collection["paths"].append(stitch_path)
 
     def _encode_stitch_hop(self, doc, out, collection, parent, **kwargs):
         self.log.debug("_encode_stitch_path.start", guid=self._guid)
@@ -1548,6 +1554,7 @@ class RSpec3Decoder(UNISDecoder):
             "Found parent '%s'." % (parent.get("$schema", None))
         stitch_hop = {}
         self._encode_children(doc, stitch_hop, collection=collection, parent=parent, **kwargs)
+        #pdb.set_trace()
         out.append(stitch_hop)
 
     def _encode_stitch_link(self, doc, out, collection, parent, **kwargs):
@@ -1557,7 +1564,14 @@ class RSpec3Decoder(UNISDecoder):
         assert parent.get("$schema", None) == UNISDecoder.SCHEMAS["domain"], \
             "Found parent '%s'." % (parent.get("$schema", None))
         attrib = dict(doc.attrib)
-        out['id'] = attrib['id']
+        port = {}
+        slice_urn = kwargs.get("slice_urn")
+        port["urn"] = RSpec3Decoder.rspec_create_urn(slice_urn+"+interface+"+attrib['id'])
+        port["id"] = self.geni_urn_to_id(slice_urn+"_interface_"+attrib['id'])
+        port["name"] = attrib['id']
+        collection['ports'].append(port)
+        out['href'] = "$..[?(@.[urn=%s])]" % port['urn'] 
+        out['rel'] = "full"
 
     def _encode_stitch_nexthop(self, doc, out, collection, parent, **kwargs):
         pass
@@ -2732,15 +2746,19 @@ def main():
         encoder = PSDecoder()
         kwargs = dict()
     
-    topology_out = encoder.encode(topology, **kwargs)
+    topology_out, path_out = encoder.encode(topology, **kwargs)
 
     if args.output is None:
         out_file = sys.stdout
+        out_file_path = sys.stdout
     else:
         out_file = open(args.output, 'w')
+        out_file_path = open(args.output+".path", 'w')
     
     json.dump(topology_out, fp=out_file, indent=args.indent)
+    json.dump(path_out, fp=out_file_path, indent=args.indent)
     out_file.close()
+    out_file_path.close()
     
 if __name__ == '__main__':
     main()
