@@ -1537,8 +1537,8 @@ class RSpec3Decoder(UNISDecoder):
         dst_endpoint = ''
         for link in parent['links']:
             if link_name == link['name']:
-                src_endpoint = link['properties']['geni']['interface_refs'][0]['component_id']
-                dst_endpoint = link['properties']['geni']['interface_refs'][1]['component_id']
+                src_endpoint = link['properties']['geni']['interface_refs'][0]['client_id'].split(':')[0]
+                dst_endpoint = link['properties']['geni']['interface_refs'][1]['client_id'].split(':')[0]
         stitch_path['id'] = src_endpoint + '%' + dst_endpoint 
         stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % src_endpoint, 'rel':"full"})
 
