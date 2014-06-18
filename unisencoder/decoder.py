@@ -17,8 +17,8 @@ from lxml import etree
 from netlogger import nllog
 from urllib import unquote
 from urllib import quote
-import urllib2 
-
+import urllib2
+import copy
 nllog.PROJECT_NAMESPACE = "unisencoder"
 
 
@@ -39,6 +39,7 @@ class UNISDecoder(object, nllog.DoesLogging):
         'network': 'http://unis.incntre.iu.edu/schema/20140214/network#',
         'blipp': 'http://unis.incntre.iu.edu/schema/20140214/blipp#',
         'metadata': 'http://unis.incntre.iu.edu/schema/20140214/metadata#',
+        'path': 'http://unis.incntre.iu.edu/schema/20140214/path#',
     }
     
     def __init__(self):
@@ -318,7 +319,14 @@ class RSpec3Decoder(UNISDecoder):
             #pdb.set_trace()
             sys.stderr.write("No handler for: %s\n" % root.tag)
         try:
-            paths = out.pop('paths', None) 
+            paths = out.pop('paths', None)
+            rev_paths = []
+            for ele in paths:
+                tmp = copy.copy(ele)
+                new_id = '%'.join(tmp['id'].split('%')[::-1])
+                tmp['id'] = new_id
+                rev_paths.append(tmp)
+            paths.append(rev_paths)
             spath = json.dumps(paths)
             path_out = json.loads(spath)
         except KeyError:
@@ -1516,7 +1524,6 @@ class RSpec3Decoder(UNISDecoder):
             parent["properties"] = {}
         if self.geni_ns not in parent["properties"]:
             parent["properties"][self.geni_ns] = {}
-        geni_props = parent["properties"][self.geni_ns]
 
         stitch_hops = {}
         self._encode_children(doc, stitch_hops, collection=collection, parent=parent, **kwargs)
@@ -1537,14 +1544,24 @@ class RSpec3Decoder(UNISDecoder):
         dst_endpoint = ''
         for link in parent['links']:
             if link_name == link['name']:
-                src_endpoint = link['properties']['geni']['interface_refs'][0]['client_id'].split(':')[0]
-                dst_endpoint = link['properties']['geni']['interface_refs'][1]['client_id'].split(':')[0]
-        stitch_path['id'] = src_endpoint + '%' + dst_endpoint 
-        stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % src_endpoint, 'rel':"full"})
+                src_client_id = link['properties']['geni']['interface_refs'][0]['client_id']
+                dst_client_id = link['properties']['geni']['interface_refs'][1]['client_id']
+                for node in parent['nodes']:
+                    for port in node['ports']:
+                        port_name = parent['ports'][int(port['href'].split('/')[-1:][0])]['name']
+                        if port_name == src_client_id:
+                            src_endpoint = node['name']
+                        if port_name == dst_client_id:
+                            dst_endpoint = node['name']
+        stitch_path['id'] = src_endpoint + '%' + dst_endpoint
+        slice_urn = kwargs.get("slice_urn")
+        stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % RSpec3Decoder.rspec_create_urn(slice_urn+"+interface+"+src_client_id), 'rel':"full"})
 
         self._encode_children(doc, stitch_hops, collection=collection, parent=parent, **kwargs)
         stitch_path['hops'] = stitch_hops
-        stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % dst_endpoint, 'rel':"full"})
+        stitch_path['$schema'] = UNISDecoder.SCHEMAS["path"]
+        stitch_path['directed'] = True
+        stitch_hops.append({'href':"$..[?(@.[urn=%s])]" % RSpec3Decoder.rspec_create_urn(slice_urn+"+interface+"+dst_client_id), 'rel':"full"})
         collection["paths"].append(stitch_path)
 
     def _encode_stitch_hop(self, doc, out, collection, parent, **kwargs):
