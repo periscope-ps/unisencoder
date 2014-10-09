@@ -4,11 +4,15 @@ Decodes different topologies to UNIS representation.
 
 @author: Ahmed El-Hassany
 @author: fernandes
+@author: Jeremy Musser
 """
 
 import argparse
 import json
 import logging
+import calendar
+import datetime
+import os
 import re
 import sys
 import uuid
@@ -134,7 +138,157 @@ class UNISDecoder(object, nllog.DoesLogging):
         """, re.VERBOSE | re.IGNORECASE | re.DOTALL)
         return pattern.match(ip) is not None
 
+
+class ExnodeDecoder(UNISDecoder):
+    def __init__(self):
+        super(ExnodeDecoder, self).__init__()
+        self._tags = {}
+        self._tags["exnode"]  = None
+        self._tags["mapping"] = "extents"
+        self._tags["read"]    = "read"
+        self._tags["write"]   = "write"
+        self._tags["manage"]  = "manage"
+
+        self._names = {}
+        self._names["filename"]       = "name"
+        self._names["lorsversion"]    = None
+        self._names["Version"]        = None
+        self._names["alloc_length"]   = None
+        self._names["alloc_offset"]   = None
+        self._names["e2e_blocksize"]  = None
+        self._names["exnode_offset"]  = "offset"
+        self._names["logical_length"] = "size"
+
+    def _refactor_default_xmlns(self, tree):
+        """
+        Change the RSpec from the default namespace to an explicit namespace.
+        This will make xpath works!
+        """
+        exclude_ns = ""
+        exclude_prefixes = ""
+
+        XSLT = '''
+               <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                 <xsl:output method="xml" indent="no"/>
+
+                 <xsl:template match="/|comment()|processing-instruction()">
+                   <xsl:copy>
+                     <xsl:apply-templates/>
+                   </xsl:copy>
+                 </xsl:template>
+
+                 <xsl:template match="*">
+                   <xsl:element name="{local-name()}">
+                     <xsl:apply-templates select="@*|node()"/>
+                   </xsl:element>
+                 </xsl:template>
+
+                 <xsl:template match="@*">
+                   <xsl:attribute name="{local-name()}">
+                     <xsl:value-of select="."/>
+                   </xsl:attribute>
+                 </xsl:template>
+               </xsl:stylesheet>'''
+        
+        xslt_root = etree.XML(XSLT)
+        transform = etree.XSLT(xslt_root)
+        tree = transform(tree)
+            
+        return tree
     
+    def encode(self, tree, **kwargs):
+        self.log.debug("encode.start", guid = self._guid)
+
+        out = {}
+        self._parent_collection = out
+        tree = self._refactor_default_xmlns(tree)
+        root = tree.getroot()
+        self._root = root
+        self._file_size = 0
+        self._creation_time = kwargs["creation_time"]
+        self._modified_time = kwargs["modified_time"]
+        
+        out = self.visit(root, None)
+        self.log.debug("encode.end", guid = self._guid)
+        return out
+    
+    def visit(self, node, parent):
+        out = {}
+        if node is None:
+            return None
+        
+        self.log.debug("visit.start", component_id = node.attrib.get("component_id", None), guid = self._guid)
+        
+        out = self.BuildNode(node, parent)
+        
+        for child in node.iterchildren(tag = etree.Element):
+            tmpTag = self.GenerateTag(child)
+            
+            if tmpTag is not None:
+                tmpNode = self.visit(child, node)
+                out = self.Join(out, tmpTag, tmpNode)
+        
+        out = self.RefineNode(out, parent)
+
+        self.log.debug("visit.end", component_id = node.attrib.get("component_id", None), guid = self._guid)        
+        return out
+    
+    def Join(self, out, tag, child):
+        self.log.debug("Join.start", component_id = tag, guid = self._guid)
+        if tag == "extents":
+            out[tag].append(child)
+        elif tag == "read" or tag == "write" or tag == "manage":
+            if "location" not in out:
+                out["location"] = {}
+            out["location"][tag] = child
+        else:
+            out[tag] = child
+        self.log.debug("Join.end", component_id = tag, guid = self._guid)
+        return out
+
+    def BuildNode(self, node, parent):
+        self.log.debug("BuildNode.start", component_id = node.attrib.get("component_id", None), guid = self._guid)
+
+        if node.tag == "metadata" and node.attrib["name"] == "logical_length":
+            self._file_size += int(node.text)
+
+        if node is self._root:
+            tmpNode = {}
+            tmpNode["extents"] = []
+            out = tmpNode
+        elif node.tag == "mapping":
+            out = {}
+        else:
+            out = node.text
+        
+        self.log.debug("BuildNode.end", component_id = node.attrib.get("component_id", None), guid = self._guid)
+        return out
+
+    def RefineNode(self, node, parent):
+        self.log.debug("RefineNode.start", guid = self._guid)
+        if parent == None:
+            node["size"] = self._file_size
+            node["id"] = node["name"]
+            node["parent"] = "None"
+            node["created"] = self._creation_time
+            node["modified"] = self._modified_time
+
+        self.log.debug("RefineNode.end", guid = self._guid)
+        return node
+
+    def GenerateTag(self, node):
+        self.log.debug("GenerateTag.start", component_id = node.attrib.get("component_id", None), guid = self._guid)
+
+        if node.tag is etree.Comment:
+            out = None
+        elif node.tag == "metadata":
+            out = self._names[node.attrib["name"]]
+        else:
+            out = self._tags[node.tag]
+        
+        self.log.debug("GenerateTag.start", component_id = node.attrib.get("component_id", None), guid = self._guid)
+        return out
+        
 class RSpec3Decoder(UNISDecoder):
     """Decodes RSpecV3 to UNIS format."""
     
@@ -2542,7 +2696,7 @@ class PSDecoder(UNISDecoder):
                 #pdb.set_trace()
                 sys.stderr.write("No handler for: %s\n" % child.tag)
                 self.log.error("no handler for '%s'" % child.tag, child=child.tag , guid=self._guid)
-            self.log.debug("_encode_children.end", child=child.tag, guid=self._guid)                
+            self.log.debug("_encode_children.end", child=child.tag, guid=self._guid)
 
 
 def setup_logger(filename="unisencoder.log"):
@@ -2601,7 +2755,7 @@ def main():
         description="Encodes RSpec V3 and the different perfSONAR's topologies to UNIS"
     )
     parser.add_argument('-t', '--type', required=True, type=str,
-        choices=["rspec3", "ps"], help='Input type (rspec3 or ps)')
+        choices=["rspec3", "ps", "exnode"], help='Input type (rspec3, ps or exnode)')
     parser.add_argument('-o', '--output', type=str, default=None,
         help='Output file')
     parser.add_argument('-l', '--log', type=str, default="unisencoder.log",
@@ -2621,8 +2775,13 @@ def main():
     
     if args.filename is None:
         in_file = sys.stdin
+        creation_time = calendar.timegm(datetime.datetime.utcnow().timetuple())
+        modified_time = creation_time
     else:
         in_file = open(args.filename, 'r')
+        info = os.stat(args.filename)
+        creation_time = int(info.st_ctime)
+        modified_time = int(info.st_mtime)
 
     try:
         if args.slice_cred and args.slice_urn:
@@ -2659,6 +2818,10 @@ def main():
     elif args.type == "ps":
         encoder = PSDecoder()
         kwargs = dict()
+    elif args.type == "exnode":
+        encoder = ExnodeDecoder()
+        kwargs = dict(creation_time = creation_time,
+                      modified_time = modified_time)
     
     topology_out = encoder.encode(topology, **kwargs)
 
