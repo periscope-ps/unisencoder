@@ -268,7 +268,6 @@ class ExnodeDecoder(UNISDecoder):
         self.log.debug("RefineNode.start", guid = self._guid)
         if parent == None:
             node["size"] = self._file_size
-            node["id"] = node["name"]
             node["parent"] = "None"
             node["created"] = self._creation_time
             node["modified"] = self._modified_time
