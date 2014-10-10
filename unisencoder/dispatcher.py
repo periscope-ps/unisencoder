@@ -62,13 +62,15 @@ def setup_logger(filename = "dispatcher.log"):
 #  Temporary function that creates a list of upload candidates
 def create_file_list():
     tmpResult = []
-    
-    for filename in os.listdir(settings.XND_FILE_PATH):
-        if filename.endswith(".xnd"):
-            tmpPath = "%s/%s" % (settings.XND_FILE_PATH, filename)
-            tmpResult.append(tmpPath)
-        else:
-            continue
+
+    for dirName, subdirList, fileList in os.walk(settings.XND_FILE_PATH):
+        for filename in fileList:
+            if filename.endswith(".xnd"):
+        	tmpPath = "%s/%s" % (dirName, filename)
+	      	tmpResult.append(tmpPath)
+		
+            else:
+		continue
         
     return tmpResult
 
@@ -89,7 +91,6 @@ def build_dispatch_list(file_list):
         for filename in file_list:
             info = os.stat(filename)
             modified_time = int(info.st_mtime)
-            creation_time = int(info.st_ctime)
             tmpDoUpload = True
             
             for entry in entries:
@@ -100,11 +101,19 @@ def build_dispatch_list(file_list):
                         tmpDoUpload = False
                     break
                 
-            dispatch_log.write("%s\t%s\n" % (filename, modified_time))
             if tmpDoUpload:
                 tmpResult.append(filename)
+            else:
+                dispatch_log.write("%s\t%s\n" % (filename, modified_time))
             
     return tmpResult
+
+def log_dispatch(filename):
+    info = os.stat(filename)
+    modified_time = int(info.st_mtime)
+    
+    with open(settings.DISPATCH_LOG_PATH, 'a') as dispatch_log:
+        dispatch_log.write("%s\t%s\n" % (filename, modified_time))
 
 def main():
     setup_logger()
@@ -113,6 +122,7 @@ def main():
     
     for filename in dispatch_list:
         dispatch.DispatchFile(filename)
-    
+        log_dispatch(filename)
+        
 if __name__ == "__main__":
     main()
