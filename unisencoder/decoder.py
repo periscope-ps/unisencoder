@@ -267,9 +267,13 @@ class ExnodeDecoder(UNISDecoder):
             tmpNode["extents"] = []
             out = tmpNode
         elif node.tag == "mapping":
+            tmpStart = datetime.datetime.utcnow()
+            tmpEnd = tmpStart + datetime.timedelta(days=2)
             tmpNode = {}
             tmpNode["location"] = "ibp://"
             tmpNode["$schema"] = "http://unis.incntre.iu.edu/schema/exnode/ext/ibp#"
+            tmpNode["lifetimes"] = []
+            tmpNode["lifetimes"].append({"start": tmpStart.strftime("%Y-%m-%d %H:%M:%S%z"), "end": tmpEnd.strftime("%Y-%m-%d %H:%M:%S%z")})
             out = tmpNode
         else:
             out = outValue
