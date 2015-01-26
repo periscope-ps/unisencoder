@@ -205,6 +205,11 @@ class ExnodeDecoder(UNISDecoder):
         root = tree.getroot()
         self._root = root
         self._file_size = 0
+
+        if "parent" not in kwargs:
+            kwargs["parent"] = None
+
+        self._parent = kwargs["parent"]
         self._creation_time = kwargs["creation_time"]
         self._modified_time = kwargs["modified_time"]
         
@@ -238,9 +243,9 @@ class ExnodeDecoder(UNISDecoder):
         if tag == "extents":
             out[tag].append(child)
         elif tag == "read" or tag == "write" or tag == "manage":
-            if "location" not in out:
-                out["location"] = {}
-            out["location"][tag] = child
+            if "mapping" not in out:
+                out["mapping"] = {}
+            out["mapping"][tag] = child
         else:
             out[tag] = child
         self.log.debug("Join.end", component_id = tag, guid = self._guid)
@@ -251,15 +256,23 @@ class ExnodeDecoder(UNISDecoder):
 
         if node.tag == "metadata" and node.attrib["name"] == "logical_length":
             self._file_size += int(node.text)
+            outValue = int(node.text)
+        elif node.tag == "metadata" and node.attrib["name"] == "exnode_offset":
+            outValue = int(node.text)
+        else:
+            outValue = node.text
 
         if node is self._root:
             tmpNode = {}
             tmpNode["extents"] = []
             out = tmpNode
         elif node.tag == "mapping":
-            out = {}
+            tmpNode = {}
+            tmpNode["location"] = "ibp://"
+            tmpNode["$schema"] = "http://unis.incntre.iu.edu/schema/exnode/ext/ibp#"
+            out = tmpNode
         else:
-            out = node.text
+            out = outValue
         
         self.log.debug("BuildNode.end", component_id = node.attrib.get("component_id", None), guid = self._guid)
         return out
@@ -268,10 +281,10 @@ class ExnodeDecoder(UNISDecoder):
         self.log.debug("RefineNode.start", guid = self._guid)
         if parent == None:
             node["size"] = self._file_size
-            node["parent"] = "None"
+            node["parent"] = self._parent
             node["created"] = self._creation_time
+            node["mode"] = "file"
             node["modified"] = self._modified_time
-
         self.log.debug("RefineNode.end", guid = self._guid)
         return node
 
