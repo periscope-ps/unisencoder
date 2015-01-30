@@ -14,4 +14,4 @@ RSPEC3_SCHEMA_DIR = SCHEMA_DIR + 'rspec' + os.sep + '3' + os.sep
 
 XND_FILE_PATH = os.path.dirname(os.path.abspath(__file__)) + os.sep + 'test'
 DISPATCH_LOG_PATH = os.path.dirname(os.path.abspath(__file__)) + os.sep + 'dispatched_files.log'
-UNIS_URL = "http://dev.incntre.iu.edu:8888"
+UNIS_URL = "http://localhost:8888/exnodes"

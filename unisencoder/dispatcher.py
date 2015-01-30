@@ -5,12 +5,15 @@ import os
 import settings
 import logging
 import uuid
+import time
 from netlogger import nllog
 from lxml import etree
 from subprocess import call
 
 
 from decoder import ExnodeDecoder
+
+root_id = ""
 
 class Dispatcher(object, nllog.DoesLogging):
     def __init__(self):
@@ -34,12 +37,13 @@ class Dispatcher(object, nllog.DoesLogging):
         self.log.debug("parse.end", guid = self._guid)
         return encoder.encode(topology, **kwargs)
     
-    def DispatchFile(self, path):
+    def DispatchFile(self, filename, parent):
         self.log.debug("dispatch.start", guid = self._guid)
-        self._path = path
+        self._path = filename
         topology_out = self._parseFile()
+        topology_out["parent"] = parent
         data = json.dumps(topology_out)
-        request = urllib2.Request("%s/files" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
+        request = urllib2.Request("%s" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
         
         try:
             response = urllib2.urlopen(request)
@@ -64,20 +68,58 @@ def create_file_list():
     tmpResult = []
 
     for dirName, subdirList, fileList in os.walk(settings.XND_FILE_PATH):
+        print "%s | %s | %s" % (dirName, subdirList, fileList)
         for filename in fileList:
             if filename.endswith(".xnd"):
         	tmpPath = "%s/%s" % (dirName, filename)
+                print tmpPath
 	      	tmpResult.append(tmpPath)
-		
             else:
 		continue
         
     return tmpResult
 
+def create_remote_directory(_name, _parent):
+    data = {}
+    data["created"]  = int(time.time())
+    data["modified"] = int(time.time())
+    data["name"]     = _name
+    data["size"]     = 0
+    data["parent"]   = _parent
+    data["mode"]     = "directory"
+    data = json.dumps(data)
+    request = urllib2.Request("%s" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
+    response = ""
+    
+    try:
+        response = urllib2.urlopen(request)
+    except urllib2.HTTPError, e:
+        print "Failed to contact UNIS"
+    except urllib2.URLError as e:
+        print "Error in URL"
+
+    response =  response.read()
+    print response
+    response = json.loads(response)
+    return response["id"]
+
+
+def create_directories(filename):
+    global root_id
+    tmpRelPath = os.path.relpath(filename, settings.XND_FILE_PATH)
+    directories = tmpRelPath.split("/")
+    print directories
+    ids = []
+    ids.append(root_id)
+    
+    for index in range(0, len(directories) - 1):
+        ids.append(create_remote_directory(directories[index], ids[index]))
+
+    return ids[len(ids) - 1]
 
 def build_dispatch_list(file_list):
     entries = []
-    tmpResult = []        
+    tmpResult = []
     
     if not os.path.exists(settings.DISPATCH_LOG_PATH):
         with open(settings.DISPATCH_LOG_PATH, 'w') as dispatch_log:
@@ -116,12 +158,17 @@ def log_dispatch(filename):
         dispatch_log.write("%s\t%s\n" % (filename, modified_time))
 
 def main():
+    global root_id
     setup_logger()
     dispatch_list = build_dispatch_list(create_file_list())
-    dispatch = Dispatcher()
+    print dispatch_list
     
+    dispatch = Dispatcher()
+    root_id = create_remote_directory("root", None)
     for filename in dispatch_list:
-        dispatch.DispatchFile(filename)
+        print filename
+        parent = create_directories(filename)
+        dispatch.DispatchFile(filename, parent)
         log_dispatch(filename)
         
 if __name__ == "__main__":
