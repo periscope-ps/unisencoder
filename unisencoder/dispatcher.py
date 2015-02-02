@@ -1,7 +1,7 @@
 import json
 import urllib2
 import urllib
-import os
+import os, sys, getopt
 import settings
 import logging
 import uuid
@@ -28,8 +28,7 @@ class Dispatcher(object, nllog.DoesLogging):
         modified_time = int(info.st_mtime)
         
         topology = etree.parse(in_file)
-        in_file.close()
-        
+        in_file.close()        
         encoder = ExnodeDecoder()
         kwargs = dict(creation_time = creation_time,
                       modified_time = modified_time)
@@ -150,6 +149,14 @@ def build_dispatch_list(file_list):
             
     return tmpResult
 
+def parse_filename(filename):
+    sensor = filename[:3]
+    path   = filename[3:6]
+    row    = filename[6:9]
+    year   = filename[9:13]
+
+    return "%s/%s/%s/%s/%s" % (sensor, path, row, year, filename)
+
 def log_dispatch(filename):
     info = os.stat(filename)
     modified_time = int(info.st_mtime)
@@ -157,19 +164,30 @@ def log_dispatch(filename):
     with open(settings.DISPATCH_LOG_PATH, 'a') as dispatch_log:
         dispatch_log.write("%s\t%s\n" % (filename, modified_time))
 
-def main():
+def main(argv):
     global root_id
+    do_expand = False
     setup_logger()
-    dispatch_list = build_dispatch_list(create_file_list())
-    print dispatch_list
+    try:
+        opts, args = getopt.getopt(argv, "x", ["--expand-folders"])
+        for opt, arg in opts:
+            if opt in ('-x', "--expand-folders"):
+                do_expand = True
+    except:
+        pass
     
+    dispatch_list = build_dispatch_list(create_file_list())
     dispatch = Dispatcher()
+    
     root_id = create_remote_directory("root", None)
     for filename in dispatch_list:
-        print filename
-        parent = create_directories(filename)
+        expanded_dir = filename
+        if do_expand:
+            expanded_dir = parse_filename(filename)
+        
+        parent = create_directories(expanded_dir)
         dispatch.DispatchFile(filename, parent)
         log_dispatch(filename)
         
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
