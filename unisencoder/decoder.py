@@ -298,9 +298,15 @@ class ExnodeDecoder(UNISDecoder):
         if node.tag is etree.Comment:
             out = None
         elif node.tag == "metadata":
-            out = self._names[node.attrib["name"]]
+            if node.attrib["name"] in self._names:
+                out = self._names[node.attrib["name"]]
+            else:
+                out = None
         else:
-            out = self._tags[node.tag]
+            if node.tag in self._tags:
+                out = self._tags[node.tag]
+            else:
+                out = None
         
         self.log.debug("GenerateTag.start", component_id = node.attrib.get("component_id", None), guid = self._guid)
         return out

@@ -50,9 +50,8 @@ class Dispatcher(object, nllog.DoesLogging):
             self.log.error("Failed to connect to UNIS", value = e.code, guid = self._guid)
         except urllib2.URLError as e:
             self.log.error("Failed to connect to UNIS", value = e.args, guid = self._guid)
-            
-        self.log.debug("dispatch.end", guid = self._guid)
-        
+
+        self.log.debug("dispatch.end", guid = self._guid)        
 
 def setup_logger(filename = "dispatcher.log"):
     logging.setLoggerClass(nllog.BPLogger)
@@ -89,7 +88,7 @@ def create_remote_directory(_name, _parent):
     data = json.dumps(data)
     request = urllib2.Request("%s" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
     response = ""
-    
+
     try:
         response = urllib2.urlopen(request)
     except urllib2.HTTPError, e:
@@ -102,11 +101,9 @@ def create_remote_directory(_name, _parent):
     response = json.loads(response)
     return response["id"]
 
-
 def create_directories(filename):
     global root_id
-    tmpRelPath = os.path.relpath(filename, settings.XND_FILE_PATH)
-    directories = tmpRelPath.split("/")
+    directories = filename.split("/")
     print directories
     ids = []
     ids.append(root_id)
@@ -155,6 +152,10 @@ def parse_filename(filename):
     row    = filename[6:9]
     year   = filename[9:13]
 
+    print "-Sensor: %s" % sensor
+    print "-Path:   %s" % path
+    print "-Row:    %s" % row
+    print "-Year:   %s" % year
     return "%s/%s/%s/%s/%s" % (sensor, path, row, year, filename)
 
 def log_dispatch(filename):
@@ -181,9 +182,10 @@ def main(argv):
     
     root_id = create_remote_directory("root", None)
     for filename in dispatch_list:
-        expanded_dir = filename
+        expanded_dir = os.path.relpath(filename, settings.XND_FILE_PATH)
         if do_expand:
-            expanded_dir = parse_filename(filename)
+            print "Expanding filename"
+            expanded_dir = parse_filename(expanded_dir)
         
         parent = create_directories(expanded_dir)
         dispatch.DispatchFile(filename, parent)
