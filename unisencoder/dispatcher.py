@@ -36,11 +36,15 @@ class Dispatcher(object, nllog.DoesLogging):
         self.log.debug("parse.end", guid = self._guid)
         return encoder.encode(topology, **kwargs)
     
-    def DispatchFile(self, filename, parent):
+    def DispatchFile(self, filename, parent, metadata):
         self.log.debug("dispatch.start", guid = self._guid)
         self._path = filename
         topology_out = self._parseFile()
         topology_out["parent"] = parent
+
+        for key in metadata:
+            topology_out[key] = metadata[key]
+        
         data = json.dumps(topology_out)
         request = urllib2.Request("%s" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
         
@@ -66,11 +70,9 @@ def create_file_list():
     tmpResult = []
 
     for dirName, subdirList, fileList in os.walk(settings.XND_FILE_PATH):
-        print "%s | %s | %s" % (dirName, subdirList, fileList)
         for filename in fileList:
             if filename.endswith(".xnd"):
         	tmpPath = "%s/%s" % (dirName, filename)
-                print tmpPath
 	      	tmpResult.append(tmpPath)
             else:
 		continue
@@ -104,7 +106,6 @@ def create_remote_directory(_name, _parent):
 def create_directories(filename):
     global root_id
     directories = filename.split("/")
-    print directories
     ids = []
     ids.append(root_id)
     
@@ -152,11 +153,17 @@ def parse_filename(filename):
     row    = filename[6:9]
     year   = filename[9:13]
 
-    print "-Sensor: %s" % sensor
-    print "-Path:   %s" % path
-    print "-Row:    %s" % row
-    print "-Year:   %s" % year
     return "%s/%s/%s/%s/%s" % (sensor, path, row, year, filename)
+
+def build_metadata(filepath):
+    path_parts = filepath.split('/')
+    metadata = {}
+    metadata["sensor"] = path_parts[0]
+    metadata["path"]   = path_parts[1]
+    metadata["row"]    = path_parts[2]
+    metadata["year"]   = path_parts[3]
+    
+    return metadata
 
 def log_dispatch(filename):
     info = os.stat(filename)
@@ -182,13 +189,15 @@ def main(argv):
     
     root_id = create_remote_directory("root", None)
     for filename in dispatch_list:
+        metadata = {}
         expanded_dir = os.path.relpath(filename, settings.XND_FILE_PATH)
         if do_expand:
             print "Expanding filename"
             expanded_dir = parse_filename(expanded_dir)
-        
+            metadata = build_metadata(expanded_dir)
+
         parent = create_directories(expanded_dir)
-        dispatch.DispatchFile(filename, parent)
+        dispatch.DispatchFile(filename, parent, metadata)
         log_dispatch(filename)
         
 if __name__ == "__main__":
