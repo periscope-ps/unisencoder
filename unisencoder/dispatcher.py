@@ -40,7 +40,7 @@ class Dispatcher(object, nllog.DoesLogging):
         topology_out = self._parseFile()
         topology_out["parent"] = parent
         topology_out["properties"] = {}
-        topology_out["properites"]["metadata"] = metadata
+        topology_out["properties"]["metadata"] = metadata
         
         data = json.dumps(topology_out)
         request = urllib2.Request("%s" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
