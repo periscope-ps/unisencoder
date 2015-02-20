@@ -17,6 +17,7 @@ import re
 import sys
 import uuid
 import pdb #python debugger use, pdb.set_trace(), to start trace
+import settings
 from lxml import etree
 from netlogger import nllog
 from urllib import unquote
