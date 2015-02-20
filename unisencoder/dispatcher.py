@@ -13,8 +13,6 @@ from subprocess import call
 
 from decoder import ExnodeDecoder
 
-root_id = ""
-
 class Dispatcher(object, nllog.DoesLogging):
     def __init__(self):
         nllog.DoesLogging.__init__(self)
@@ -36,14 +34,13 @@ class Dispatcher(object, nllog.DoesLogging):
         self.log.debug("parse.end", guid = self._guid)
         return encoder.encode(topology, **kwargs)
     
-    def DispatchFile(self, filename, parent, metadata):
+    def DispatchFile(self, filename, parent, metadata = None):
         self.log.debug("dispatch.start", guid = self._guid)
         self._path = filename
         topology_out = self._parseFile()
         topology_out["parent"] = parent
-
-        for key in metadata:
-            topology_out[key] = metadata[key]
+        topology_out["properties"] = {}
+        topology_out["properites"]["metadata"] = metadata
         
         data = json.dumps(topology_out)
         request = urllib2.Request("%s" % settings.UNIS_URL, data = data, headers = {'Content-Type': 'application/perfsonar+json'})
@@ -103,11 +100,10 @@ def create_remote_directory(_name, _parent):
     response = json.loads(response)
     return response["id"]
 
-def create_directories(filename):
-    global root_id
+def create_directories(filename, root):
     directories = filename.split("/")
     ids = []
-    ids.append(root_id)
+    ids.append(root)
     
     for index in range(0, len(directories) - 1):
         ids.append(create_remote_directory(directories[index], ids[index]))
@@ -173,7 +169,6 @@ def log_dispatch(filename):
         dispatch_log.write("%s\t%s\n" % (filename, modified_time))
 
 def main(argv):
-    global root_id
     do_expand = False
     setup_logger()
     try:
@@ -196,7 +191,7 @@ def main(argv):
             expanded_dir = parse_filename(expanded_dir)
             metadata = build_metadata(expanded_dir)
 
-        parent = create_directories(expanded_dir)
+        parent = create_directories(expanded_dir, root_id)
         dispatch.DispatchFile(filename, parent, metadata)
         log_dispatch(filename)
         
