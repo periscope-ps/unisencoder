@@ -182,7 +182,7 @@ def main(argv):
     dispatch_list = build_dispatch_list(create_file_list())
     dispatch = Dispatcher()
     
-    root_id = create_remote_directory(settings.ROOT_FILENAME, None)
+    root_id = create_remote_directory(settings.ROOT_NAME, None)
     for filename in dispatch_list:
         metadata = {}
         expanded_dir = os.path.relpath(filename, settings.XND_FILE_PATH)
