@@ -214,6 +214,11 @@ class ExnodeDecoder(UNISDecoder):
         self._creation_time = kwargs["creation_time"]
         self._modified_time = kwargs["modified_time"]
         
+        if "duration" in kwargs:
+            self._duration = kwargs["duration"]
+        else:
+            self._duration = settings.DEFAULT_EXNODE_DURATION
+        
         out = self.visit(root, None)
         self.log.debug("encode.end", guid = self._guid)
         return out
@@ -269,7 +274,7 @@ class ExnodeDecoder(UNISDecoder):
             out = tmpNode
         elif node.tag == "mapping":
             tmpStart = datetime.datetime.utcnow()
-            tmpEnd = tmpStart + datetime.timedelta(hours = settings.EXNODE_LIFETIME)
+            tmpEnd = tmpStart + datetime.timedelta(hours = self._duration)
             tmpNode = {}
             tmpNode["location"] = "ibp://"
             tmpNode["$schema"] = "http://unis.incntre.iu.edu/schema/exnode/ext/ibp#"
