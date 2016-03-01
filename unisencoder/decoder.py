@@ -1147,7 +1147,10 @@ class RSpec3Decoder(UNISDecoder):
         if element is None:
             raise UNISDecoderException("Cannot make self link to NONE")
         if rspec_type == RSpec3Decoder.RSpecManifest:
-            urn = element.get("sliver_id", None) or element.get("client_id", None)
+            if use_client_id:
+                urn = element.get("client_id", None)
+            else:
+                urn = element.get("sliver_id", None)
         else:
             urn = element.get("component_id", None)
         
@@ -1172,7 +1175,7 @@ class RSpec3Decoder(UNISDecoder):
         # Try to construct xpath to make the lookup easier
         xpath = self._tree.getpath(element)
         
-        peices = xpath.split("/")[2:]
+        pieces = xpath.split("/")[2:]
         names_map = {
             "topology": "topolgies",
             "domain": "domains",
@@ -1189,7 +1192,7 @@ class RSpec3Decoder(UNISDecoder):
         jpath = []
         add_urn = False
         collections = ["topolgies", "domains"]
-        for p in peices:
+        for p in pieces:
             p = p[p.find(":") + 1:]
             if "[" in p:
                 name, index = p.split("[")
@@ -1198,7 +1201,7 @@ class RSpec3Decoder(UNISDecoder):
                 name = p
                 index = ""
             if name not in names_map:
-                raise UNISDecoderException("Unrecongized type '%s' in '%s'" % (name, xpath))
+                raise UNISDecoderException("Unrecognized type '%s' in '%s'" % (name, xpath))
             if name not in collections:
                 add_urn = True
                 if len(jpath) > 0:
@@ -2412,7 +2415,7 @@ class PSDecoder(UNISDecoder):
         
         # Try to construct xpath to make the lookup easier
         xpath = self._tree.getpath(element)
-        peices = xpath.split("/")[2:]
+        pieces = xpath.split("/")[2:]
         names_map = {
             "topology": "topolgies",
             "domain": "domains",
@@ -2427,7 +2430,7 @@ class PSDecoder(UNISDecoder):
         jpath = []
         add_urn = False
         collections = ["topolgies", "domains"]
-        for p in peices:
+        for p in pieces:
             p = p[p.find(":") + 1:]
             if "[" in p:
                 name, index = p.split("[")
