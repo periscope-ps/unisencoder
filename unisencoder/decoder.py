@@ -22,7 +22,9 @@ from lxml import etree
 from netlogger import nllog
 from urllib import unquote
 from urllib import quote
-import urllib2 
+import urllib2
+from rdfdecoder import RdfDecoder
+from odldecoder import OdlDecoder
 
 nllog.PROJECT_NAMESPACE = "unisencoder"
 
@@ -2782,11 +2784,12 @@ class Usage(Exception):
         return repr(self.msg)
 
 def main():
+    print("ARGS PARSER")
     parser = argparse.ArgumentParser(
         description="Encodes RSpec V3 and the different perfSONAR's topologies to UNIS"
     )
     parser.add_argument('-t', '--type', required=True, type=str,
-        choices=["rspec3", "ps", "exnode"], help='Input type (rspec3, ps or exnode)')
+        choices=["rspec3", "rdf", "ps", "exnode"], help='Input type (rspec3, ps, rdf or exnode)')
     parser.add_argument('-o', '--output', type=str, default=None,
         help='Output file')
     parser.add_argument('-l', '--log', type=str, default="unisencoder.log",
@@ -2799,11 +2802,16 @@ def main():
         help='The URN of the component manager of the advertisment RSpec.')
     parser.add_argument('--indent', type=int, default=2,
         help='JSON output indent.')
+    parser.add_argument('-u', '--unis_ip', type=str, default=None,
+        help='Unis Instance IP')
+    parser.add_argument('-p', '--unis_port', type=str, default=None,
+        help='Unis Instance post')
     parser.add_argument('filename', type=str, help='Input file.')    
     args = parser.parse_args()
     
     setup_logger(args.log)
-    
+
+
     if args.filename is None:
         in_file = sys.stdin
         creation_time = calendar.timegm(datetime.datetime.utcnow().timetuple())
@@ -2838,31 +2846,46 @@ def main():
         print >>sys.stderr, err.msg
         return
 
-    topology = etree.parse(in_file)
-    in_file.close()
-    
-    if args.type == "rspec3":
-        encoder = RSpec3Decoder()
-        kwargs = dict(slice_urn=slice_urn,
-                      slice_uuid=slice_uuid,
-                      component_manager_id=args.component_manager_id)
-    elif args.type == "ps":
-        encoder = PSDecoder()
-        kwargs = dict()
-    elif args.type == "exnode":
-        encoder = ExnodeDecoder()
-        kwargs = dict(creation_time = creation_time,
-                      modified_time = modified_time)
-    
-    topology_out = encoder.encode(topology, **kwargs)
+    if args.type in ["rspec3", "ps", "exnode"]:
+        topology = etree.parse(in_file)
+        in_file.close()
 
-    if args.output is None:
-        out_file = sys.stdout
-    else:
-        out_file = open(args.output, 'w')
-    
-    json.dump(topology_out, fp=out_file, indent=args.indent)
-    out_file.close()
+        if args.type == "rspec3":
+            encoder = RSpec3Decoder()
+            kwargs = dict(slice_urn=slice_urn,
+                          slice_uuid=slice_uuid,
+                          component_manager_id=args.component_manager_id)
+        elif args.type == "ps":
+            encoder = PSDecoder()
+            kwargs = dict()
+        elif args.type == "exnode":
+            encoder = ExnodeDecoder()
+            kwargs = dict(creation_time = creation_time,
+                          modified_time = modified_time)
+
+        topology_out = encoder.encode(topology, **kwargs)
+
+        if args.output is None:
+            out_file = sys.stdout
+        else:
+            out_file = open(args.output, 'w')
+
+        json.dump(topology_out, fp=out_file, indent=args.indent)
+        out_file.close()
+
+    elif args.type in ["rdf", "odl"]:
+        print("In RDF/ODL parser")
+
+        if args.type == "rdf":
+            print("RDF parser")
+            if args.unis_ip is not None and args.unis_port is not None:
+                print("UNIS IP"+args.unis_ip)
+                print("UNIS Port"+args.unis_port)
+                print("RDF file"+args.filename)
+                rdf_decoder = RdfDecoder(args.filename, args.unis_ip, args.unis_port)
+
+        elif args.type == "odl":
+            print("ODL parser")
     
 if __name__ == '__main__':
     main()
