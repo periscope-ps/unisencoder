@@ -5,8 +5,6 @@ import coreapi
 from topology import Topology, Node, Port, IntermediateNode
 
 
-
-
 class OdlDecoder:
 
     SCHEMAS = {
@@ -26,7 +24,7 @@ class OdlDecoder:
         'ipports': 'http://unis.crest.iu.edu/schema/ext/ipport/1/ipport#'
     }
 
-    def __init__(self, host_name_unis, port_number_unis, host_name_odl, port_number_odl='8181', auth_username = 'admin', auth_password = 'admin'):
+    def __init__(self, host_name_unis, port_number_unis, host_name_odl, port_number_odl='8181', auth_username='admin', auth_password='admin'):
 
         self.topology_url = "http://"+host_name_odl+":"+port_number_odl+"/restconf/operational/network-topology:network-topology"
         headers = {'accept': 'application/json'}
@@ -38,22 +36,20 @@ class OdlDecoder:
         self.clean_all()
         self.decode()
 
-
     def clean_all(self):
         print("Starting the initial CLEANUP PROCESS")
         self.clean_nodes()
         self.delete_ports()
         self.delete_links()
 
-
     def clean_nodes(self):
         print("Deleting the nodes")
-        nodes_uri=self.unis_uri+"nodes"
+        nodes_uri = self.unis_uri+"nodes"
         nodes_list = coreapi.get(nodes_uri)
         for node_dict in nodes_list:
             print node_dict['selfRef']
             # requests.delete(node_dict['selfRef'])
-            del_uri=nodes_uri+"/"+node_dict['selfRef'].split("/")[4]
+            del_uri = nodes_uri+"/"+node_dict['selfRef'].split("/")[4]
             requests.delete(del_uri)
 
     def delete_ports(self):
@@ -67,7 +63,6 @@ class OdlDecoder:
             print("Delete:"+del_uri)
             requests.delete(del_uri)
 
-
     def delete_links(self):
         print("Deleting the links")
         links_uri=self.unis_uri+"links"
@@ -75,7 +70,7 @@ class OdlDecoder:
         for link_dict in links_list:
             print link_dict['selfRef']
             # requests.delete(port_dict['selfRef'])
-            del_uri=links_uri+"/"+link_dict['selfRef'].split("/")[4]
+            del_uri = links_uri+"/"+link_dict['selfRef'].split("/")[4]
             print("Delete:"+del_uri)
             requests.delete(del_uri)
 
@@ -108,9 +103,8 @@ class OdlDecoder:
         self.create_links_from_odl()
         self.build_links()
 
-
     def create_nodes_from_odl(self):
-        nodes_uri=self.unis_uri+"nodes"
+        nodes_uri = self.unis_uri+"nodes"
         nodes = []
         for topology in self.resp_dict['network-topology']['topology']:
             if 'node' in topology:
@@ -130,9 +124,8 @@ class OdlDecoder:
                 print("JSON DATA:"+json_data)
                 requests.post(nodes_uri, data = json_data)
 
-
     def update_node_refs(self):
-        nodes_uri=self.unis_uri+"nodes"
+        nodes_uri = self.unis_uri+"nodes"
         nodes_list = coreapi.get(nodes_uri)
         for check_node in nodes_list:
             print check_node['name']
@@ -142,10 +135,9 @@ class OdlDecoder:
             print "\n"
         self.topology_object.display_topology()
 
-
     def create_ports_from_odl(self):
         print("PORTSSSSS!!!!")
-        ports_uri=self.unis_uri+"ports"
+        ports_uri = self.unis_uri+"ports"
         ports = []
         for topology in self.resp_dict['network-topology']['topology']:
             if 'node' in topology:
@@ -171,9 +163,8 @@ class OdlDecoder:
             print("PORTS URI::"+ports_uri)
             requests.post(ports_uri, data = ports_json_data)
 
-
     def update_port_refs(self):
-        ports_uri=self.unis_uri+"ports"
+        ports_uri = self.unis_uri+"ports"
         ports_list = coreapi.get(ports_uri)
 
         for check_port in ports_list:
@@ -210,16 +201,13 @@ class OdlDecoder:
                     dst_port_id = self.topology_object.nodes[dst_node_id].get_port_id_by_name(dst_port_name)
                     self.topology_object.nodes[src_node_id].ports[src_port_id].add_link(link_id,dst_node_id,dst_port_id)
 
-
     def build_links(self):
         print("build_links::")
         link = dict()
         link["directed"] = False
         link["$schema"] = self.SCHEMAS['links']
         link["name"] = "linkk"
-
         for node_id in self.topology_object.nodes.keys():
-
             for src_port_id in self.topology_object.nodes[node_id].ports:
                 src_port_obj = self.topology_object.nodes[node_id].ports[src_port_id]
                 # check if a link exists
@@ -227,10 +215,10 @@ class OdlDecoder:
                     port_obj = self.topology_object.nodes[node_id].ports[src_port_id]
                     endpoints = []
                     port_obj.display_port()
-                    endpoint = {"href" : "abcref", "rel" : "full"}
+                    endpoint = {"href": "abcref", "rel": "full"}
                     endpoint["href"] = self.create_ref_url("ports", src_port_id)
                     endpoints.append(endpoint)
-                    endpoint = {"href" : "abcref", "rel" : "full"}
+                    endpoint = {"href": "abcref", "rel": "full"}
                     dst_port_id = src_port_obj.connected_to_port_id
                     endpoint["href"] = self.create_ref_url("ports", dst_port_id)
                     endpoints.append(endpoint)
@@ -238,7 +226,7 @@ class OdlDecoder:
                     json_data = json.dumps(link)
                     print(json_data)
                     print(self.create_ref_url("links"))
-                    r=requests.post(self.create_ref_url("links"), data=json_data)
+                    r = requests.post(self.create_ref_url("links"), data=json_data)
 
 
 # odlDecoder = OdlDecoder('10.10.0.135', '8888', '10.10.0.136', '8181')

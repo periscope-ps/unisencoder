@@ -1,0 +1,87 @@
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:ndl="http://www.science.uva.nl/research/sne/ndl#" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#">
+<ndl:Location rdf:about="#Seattle - (Qwest) --[router]">
+<ndl:name>Seattle - (Qwest) --[router]</ndl:name>
+<geo:lat>47.614457</geo:lat>
+<geo:long>-122.338413</geo:long>
+</ndl:Location>
+<ndl:Device rdf:about="#rtr.seat-old.net.internet2.edu">
+<ndl:name>rtr.seat-old.net.internet2.edu</ndl:name>
+<ndl:locatedAt rdf:resource="#Seattle - (Qwest) --[router]"/>
+<ndl:hasInterface rdf:resource="#rtr.seat-old.net.internet2.edu:dsc-.0"/>
+<ndl:hasInterface rdf:resource="#rtr.seat-old.net.internet2.edu:ge-0/1/0.0"/>
+<ndl:hasInterface rdf:resource="#rtr.seat-old.net.internet2.edu:ge-0/1/0.10"/>
+</ndl:Device>
+<ndl:Interface rdf:about="#rtr.seat-old.net.internet2.edu:dsc-.0">
+<ndl:name>rtr.seat-old.net.internet2.edu:dsc-.0</ndl:name>
+<ndl:connectedTo rdf:resource="#Discard Interface"/>
+</ndl:Interface>
+<ndl:Interface rdf:about="#rtr.seat-old.net.internet2.edu:ge-0/1/0.0">
+<ndl:name>rtr.seat-old.net.internet2.edu:ge-0/1/0.0</ndl:name>
+<ndl:connectedTo rdf:resource="#Pacific Northwest Gigapop | AS:101"/>
+</ndl:Interface>
+<ndl:Interface rdf:about="#rtr.seat-old.net.internet2.edu:ge-0/1/0.10">
+<ndl:name>rtr.seat-old.net.internet2.edu:ge-0/1/0.10</ndl:name>
+<ndl:connectedTo rdf:resource="#Pacific Northwest Gigapop | AS:101"/>
+</ndl:Interface>
+<ndl:Device rdf:about="#dwdm.seat-old.net.internet2.edu">
+	<ndl:name>dwdm.seat-old.net.internet2.edu</ndl:name>
+	<ndl:locatedAt rdf:resource="#Seattle - (Qwest) --[router]"/>
+	<ndl:hasInterface rdf:resource="#dwdm.seat-old.net.internet2.edu:FastEthernet0/1"/>
+	<ndl:hasInterface rdf:resource="#dwdm.seat-old.net.internet2.edu:FastEthernet0/10"/>
+	<ndl:hasInterface rdf:resource="#dwdm.seat-old.net.internet2.edu:FastEthernet0/11"/>
+</ndl:Device>
+<ndl:Interface rdf:about="#dwdm.seat-old.net.internet2.edu:FastEthernet0/1">
+	<ndl:name>dwdm.seat-old.net.internet2.edu:FastEthernet0/1</ndl:name>
+	<ndl:connectedTo rdf:resource="#4870 #1"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#dwdm.seat-old.net.internet2.edu:FastEthernet0/10">
+	<ndl:name>dwdm.seat-old.net.internet2.edu:FastEthernet0/10</ndl:name>
+	<ndl:connectedTo rdf:resource="#Pacific Northwest Gigapop | AS:101"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#dwdm.seat-old.net.internet2.edu:FastEthernet0/11">
+	<ndl:name>dwdm.seat-old.net.internet2.edu:FastEthernet0/11</ndl:name>
+	<ndl:connectedTo rdf:resource="#planetlab1"/>
+</ndl:Interface>
+<ndl:Device rdf:about="#rtr10005.seat.net.internet2.edu">
+	<ndl:name>rtr10005.seat.net.internet2.edu</ndl:name>
+	<ndl:locatedAt rdf:resource="#Seattle-Westin--[router]"/>
+	<ndl:hasInterface rdf:resource="#rtr10005.seat.net.internet2.edu:-.0"/>
+	<ndl:hasInterface rdf:resource="#rtr10005.seat.net.internet2.edu:ae0"/>
+	<ndl:hasInterface rdf:resource="#rtr10005.seat.net.internet2.edu:ae0.10"/>
+	<ndl:hasInterface rdf:resource="#rtr10005.seat.net.internet2.edu:ae0.20"/>
+	<ndl:hasInterface rdf:resource="#rtr10005.seat.net.internet2.edu:ae0.30"/>
+	<ndl:hasInterface rdf:resource="#rtr10005.seat.net.internet2.edu:ae8"/>
+</ndl:Device>
+<ndl:Interface rdf:about="#rtr10005.seat.net.internet2.edu:-.0">
+	<ndl:name>rtr10005.seat.net.internet2.edu:-.0</ndl:name>
+	<ndl:connectedTo rdf:resource="#Discard Interface"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#rtr10005.seat.net.internet2.edu:ae0">
+	<ndl:name>rtr10005.seat.net.internet2.edu:ae0</ndl:name>
+	<ndl:connectedTo rdf:resource="#BACKBONE: SALT-SEAT LAG | I2-SALT-SEAT-LAG-08942"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#rtr10005.seat.net.internet2.edu:ae0.10">
+	<ndl:name>rtr10005.seat.net.internet2.edu:ae0.10</ndl:name>
+	<ndl:connectedTo rdf:resource="#BACKBONE: SALT-SEAT R&amp;E VLAN"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#rtr10005.seat.net.internet2.edu:ae0.20">
+	<ndl:name>rtr10005.seat.net.internet2.edu:ae0.20</ndl:name>
+	<ndl:connectedTo rdf:resource="#BACKBONE: SALT-SEAT COMMODITY VLAN"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#rtr10005.seat.net.internet2.edu:ae0.30">
+	<ndl:name>rtr10005.seat.net.internet2.edu:ae0.30</ndl:name>
+	<ndl:connectedTo rdf:resource="#BACKBONE: SALT-SEAT ION VLAN"/>
+</ndl:Interface>
+
+<ndl:Interface rdf:about="#rtr10005.seat.net.internet2.edu:ae8">
+	<ndl:name>rtr10005.seat.net.internet2.edu:ae8</ndl:name>
+	<ndl:connectedTo rdf:resource="#Pacific Northwest Gigapop | AS:101"/>
+</ndl:Interface>
+
+</rdf:RDF>
